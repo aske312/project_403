@@ -9,7 +9,7 @@ class Settings:
     # App
     APP_NAME = os.getenv("APP_NAME", "DEBUG_APP_NAME")
     VERSION = ("v " + os.getenv("VERSION", "0.0.1")
-               + " build: " + subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip())
+               + " build " + subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip())
     ENV = os.getenv("ENV", "development")
     DEBUG = os.getenv("DEBUG", "False") == "True"
 

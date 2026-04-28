@@ -6,9 +6,6 @@ app = FastAPI(
     version = settings.VERSION
 )
 
-print(settings.APP_NAME)
-print(settings.VERSION)
-
 # ------------------- # HEALTH CHECK # -------------------
 @app.get("/debug_http")
 def health_check():
