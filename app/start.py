@@ -7,7 +7,7 @@ app = FastAPI(
 )
 
 # ------------------- # HEALTH CHECK # -------------------
-@app.get("/debug_http")
+@app.get("/debug")
 def health_check():
     return {
         "status": "ok",
