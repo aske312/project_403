@@ -11,5 +11,5 @@ app = FastAPI(
 def health_check():
     return {
         "status": "ok",
-        "service": "gebug_hello"
+        "service": "hello"
     }
