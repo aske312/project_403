@@ -4,10 +4,6 @@
 /.vite/
 /.venv/
 node_modules
-/eslint.config.js
-package.json
-package-lock.json
-vite.config.js
 
 # Logs
 logs
