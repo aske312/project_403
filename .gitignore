@@ -3,6 +3,7 @@
 /.venv/
 
 # Logs
+/.vite/
 logs
 *.log
 npm-debug.log*
