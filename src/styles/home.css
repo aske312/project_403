@@ -1,0 +1,251 @@
+
+/* =========================
+   BASE
+========================= */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: Inter, Arial, sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+/* LIGHT THEME */
+.light {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* DARK THEME */
+.dark {
+  background: #121417;
+  color: #e5e7eb;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.header {
+  height: 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.dark .header {
+  border-color: #2a2f36;
+}
+
+.logo {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* RIGHT SIDE CONTROLS */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* THEME BUTTON */
+.circle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.circle-btn:hover {
+  transform: scale(1.08);
+}
+
+/* LANGUAGE FLAG */
+.flag-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.flag-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* =========================
+   HERO
+========================= */
+
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 50px 20px;
+}
+
+.hero h1 {
+  font-size: 42px;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #6b7280;
+  margin-bottom: 6px;
+  max-width: 520px;
+}
+
+.desc {
+  color: #9ca3af;
+  max-width: 520px;
+  margin-bottom: 30px;
+}
+
+/* =========================
+   FEATURE BLOCKS
+========================= */
+
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 520px;
+  max-width: 100%;
+  margin-bottom: 25px;
+}
+
+/* SINGLE BLOCK */
+.block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  transition: 0.2s ease;
+}
+
+.dark .block {
+  background: #1f2329;
+  border-color: #2a2f36;
+}
+
+.block:hover {
+  transform: translateY(-2px);
+  border-color: #3b82f6;
+}
+
+/* IMAGE SLOT */
+.img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #d1d5db;
+}
+
+.dark .img {
+  background: #2a2f36;
+}
+
+.img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* TEXT INSIDE BLOCK */
+.block b {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 14px;
+}
+
+.block p {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* =========================
+   DOWNLOAD CTA
+========================= */
+
+.download-btn {
+  margin-top: 10px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.download-btn:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+.footer {
+  height: 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  border-top: 1px solid #d1d5db;
+  font-size: 13px;
+}
+
+.dark .footer {
+  border-color: #2a2f36;
+}
+
+.links {
+  display: flex;
+  gap: 14px;
+}
+
+.links a {
+  text-decoration: none;
+  color: inherit;
+  transition: 0.2s;
+}
+
+.links a:hover {
+  color: #3b82f6;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 600px) {
+  .hero h1 {
+    font-size: 32px;
+  }
+
+  .blocks {
+    width: 100%;
+  }
+}
