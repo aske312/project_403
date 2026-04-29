@@ -1,13 +1,13 @@
 from fastapi import FastAPI, APIRouter
-from backend.app.core.config import settings
-from backend.app.api.db import router as db_router
+from app.core.config import settings
+from app.api.db import router as db_router
 from fastapi.middleware.cors import CORSMiddleware
 
 router = APIRouter()
 
 app = FastAPI(
-    title = settings.APP_NAME,
-    version = settings.VERSION
+    title=settings.APP_NAME,
+    version=settings.VERSION
 )
 app.include_router(db_router)
 app.add_middleware(
