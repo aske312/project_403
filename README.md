@@ -195,7 +195,7 @@ flowchart TD
   /schemas
   /services
   /ws
-  /core
+  /setting
 ```
 
 ---

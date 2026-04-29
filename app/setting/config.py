@@ -4,7 +4,7 @@ import os
 
 load_dotenv()
 
-class Settings:
+class Parameters:
     # App
     APP_NAME = os.getenv("APP_NAME", "DEBUG_APP_NAME")
     VERSION = ("v " + os.getenv("VERSION", "0.0.1")
@@ -24,5 +24,5 @@ class Settings:
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
-settings = Settings()
+parameters = Parameters()
 
