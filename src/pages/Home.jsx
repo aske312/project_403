@@ -86,7 +86,6 @@ export default function Home() {
 
         <h1>{t.brand}</h1>
         <p className="subtitle">{t.subtitle}</p>
-
         <p className="desc">{t.desc}</p>
 
         {/* BLOCKS */}
