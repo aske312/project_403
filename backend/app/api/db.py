@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from sqlalchemy import text
-from app.db.session import engine
+from backend.app.db.session import engine
 
 router = APIRouter()
 
