@@ -19,9 +19,16 @@ app.add_middleware(
 )
 
 # ------------------- # HEALTH CHECK # -------------------
-@app.get("/debug")
+@app.get("/health")
 def health_check():
     return {
-        "status": "ok",
-        "service": "hello"
+        "status": "OK",
+        "message": "health check is ok"
+    }
+
+@app.post("/digital")
+def health_check():
+    return {
+        "status": "OK",
+        "message": "create"
     }

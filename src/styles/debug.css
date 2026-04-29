@@ -1,0 +1,233 @@
+/* =========================
+   THEME (soft dark gray)
+========================= */
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, Arial;
+  background: #1f2329; /* мягкий тёмно-серый */
+  color: #e5e7eb;
+}
+
+.container {
+  max-width: 980px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #f3f4f6;
+}
+
+/* =========================
+   ENDPOINT CARD
+========================= */
+
+.endpoint {
+  border: 1px solid #2f3540;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  background: #262b33;
+  overflow: hidden;
+  transition: 0.2s;
+}
+
+.endpoint:hover {
+  border-color: #60a5fa;
+}
+
+/* HEADER */
+
+.endpoint-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  padding: 12px 14px;
+  cursor: pointer;
+
+  background: #2b313a;
+}
+
+/* LEFT SIDE */
+
+.endpoint-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* METHOD */
+
+.method {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.method.GET {
+  background: #1e3a8a;
+  color: #93c5fd;
+}
+
+.method.POST {
+  background: #14532d;
+  color: #86efac;
+}
+
+.method.PUT {
+  background: #7c2d12;
+  color: #fdba74;
+}
+
+.method.DELETE {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+/* URL */
+
+.url {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: #e5e7eb;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* RIGHT SIDE */
+
+.endpoint-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* STATUS BADGE */
+
+.status-badge {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.ok {
+  color: #22c55e;
+}
+
+.status-badge.error {
+  color: #ef4444;
+}
+
+/* ARROW */
+
+.arrow {
+  font-size: 12px;
+  transition: 0.2s;
+  color: #9ca3af;
+}
+
+.arrow.open {
+  transform: rotate(90deg);
+}
+
+/* =========================
+   CONTENT (STACKED LAYOUT)
+========================= */
+
+.endpoint-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding: 14px;
+}
+
+/* =========================
+   PANELS (STACKED)
+========================= */
+
+.panel {
+  border: 1px solid #374151;
+  border-radius: 10px;
+  background: #1f242c;
+  padding: 12px;
+
+  min-width: 0;
+}
+
+/* TITLE */
+
+.panel-title {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* =========================
+   KEY-VALUE
+========================= */
+
+.kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 8px;
+
+  background: #262b33;
+  border: 1px solid #374151;
+  border-radius: 6px;
+
+  font-size: 13px;
+}
+
+.kv-key {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.kv-value {
+  color: #d1d5db;
+  word-break: break-word;
+}
+
+/* =========================
+   JSON
+========================= */
+
+.json {
+  background: #111827;
+  border: 1px solid #374151;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  overflow: auto;
+  color: #e5e7eb;
+}
+
+/* =========================
+   STATES
+========================= */
+
+.loading {
+  color: #9ca3af;
+}
+
+.error {
+  color: #ef4444;
+  font-weight: 600;
+}
