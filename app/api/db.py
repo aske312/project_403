@@ -1,11 +1,11 @@
 from fastapi import APIRouter
 from sqlalchemy import text
-from app.db.session import engine
+from app.base.session import engine
 
 router = APIRouter()
 
-@router.get("/db-check")
-async def db_check():
+@router.get("/api/db/check_connect")
+async def check_connect():
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))

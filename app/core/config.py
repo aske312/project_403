@@ -5,7 +5,6 @@ import os
 load_dotenv()
 
 class Settings:
-
     # App
     APP_NAME = os.getenv("APP_NAME", "DEBUG_APP_NAME")
     VERSION = ("v " + os.getenv("VERSION", "0.0.1")
@@ -26,3 +25,4 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
 settings = Settings()
+
