@@ -71,9 +71,9 @@ export default function Home() {
             }
           >
             {lang === "RU" ? (
-              <img src="/assets/ru.png" />
+              <img src="ru.png" />
             ) : (
-              <img src="/assets/uk.png" />
+              <img src="uk.png" />
             )}
           </button>
 
