@@ -1,48 +1,20 @@
 # Project_403
 
-MVP-заготовка приватного мессенджера.
+MVP-заготовка приватного мессенджера: React/Vite frontend, FastAPI backend, debug UI и подготовка к PostgreSQL.
 
-В проекте есть:
+## Навигация
 
-- React/Vite frontend;
-- FastAPI backend;
-- debug-страница для проверки API;
-- заготовка подключения к PostgreSQL;
-- стартовые скрипты для Windows и Ubuntu/Linux.
-
-Подробная памятка по запуску: [RUNBOOK.md](RUNBOOK.md).
+- [Быстрый старт](#быстрый-старт)
+- [Bootstrap на новом сервере](#bootstrap-на-новом-сервере)
+- [Адреса](#адреса)
+- [Команды](#команды)
+- [API](#api)
+- [Переменные окружения](#переменные-окружения)
+- [База данных](#база-данных)
+- [Диаграммы](#диаграммы)
+- [Текущее состояние](#текущее-состояние)
 
 ## Быстрый старт
-
-### Windows
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
-```
-
-### Ubuntu/Linux
-
-```bash
-chmod +x ./start.sh
-./start.sh
-```
-
-Скрипты сами подготовят окружение: создадут `.env`, `.venv`, установят Python/npm-зависимости и запустят backend + frontend.
-
-## Адреса
-
-- Frontend: http://127.0.0.1:5173
-- Debug UI: http://127.0.0.1:5173/debug
-- Backend: http://127.0.0.1:8000
-- FastAPI docs: http://127.0.0.1:8000/docs
-
-## Основные команды
-
-Установить зависимости и запустить проект:
-
-```bash
-./start.sh
-```
 
 Windows:
 
@@ -50,37 +22,97 @@ Windows:
 powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Только подготовить окружение:
+Ubuntu/Linux:
 
 ```bash
-./start.sh --install-only
+chmod +x ./start.sh
+./start.sh
+```
+
+Стартовые скрипты создают `.env`, `.venv`, устанавливают Python/npm-зависимости и запускают backend + frontend.
+
+## Bootstrap на новом сервере
+
+`start.ps1` и `start.sh` можно запускать внутри уже склонированного проекта или как отдельный файл на новой машине.
+
+Репозиторий по умолчанию:
+
+```text
+https://github.com/aske312/project_403.git
+```
+
+Ubuntu/Linux bootstrap:
+
+```bash
+chmod +x ./start.sh
+./start.sh
+```
+
+Скрипт может установить через `apt-get`: `git`, `python3`, `python3-venv`, `python3-pip`, `curl`, `ca-certificates`. Если Node.js отсутствует или версия ниже 20, скрипт поставит Node.js 20 LTS через NodeSource. Для этого нужны интернет и права `sudo`.
+
+Windows bootstrap:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+Скрипт может установить через `winget`: Git, Python и Node.js/npm. После установки через `winget` иногда нужно открыть новую PowerShell-сессию, чтобы обновился `PATH`.
+
+Другой репозиторий или каталог:
+
+```bash
+./start.sh --repo-url https://github.com/user/repo.git --project-dir my-app
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -InstallOnly
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -RepoUrl https://github.com/user/repo.git -ProjectDir my-app
 ```
 
-Проверить/обновить frontend-сборку:
+Не трогать системные зависимости:
 
 ```bash
-./start.sh --build-only
+./start.sh --skip-system-deps
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -BuildOnly
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -SkipSystemDeps
 ```
 
-Обновить репозиторий перед запуском:
+## Адреса
+
+| Назначение | URL |
+| --- | --- |
+| Frontend | http://127.0.0.1:5173 |
+| Debug UI | http://127.0.0.1:5173/debug |
+| Backend | http://127.0.0.1:8000 |
+| FastAPI docs | http://127.0.0.1:8000/docs |
+
+## Команды
+
+### Стартовые скрипты
+
+| Действие | Windows | Ubuntu/Linux |
+| --- | --- | --- |
+| Запуск | `powershell -ExecutionPolicy Bypass -File .\start.ps1` | `./start.sh` |
+| Только подготовка | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -InstallOnly` | `./start.sh --install-only` |
+| Проверить сборку | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -BuildOnly` | `./start.sh --build-only` |
+| Обновить repo | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -UpdateRepo` | `./start.sh --update-repo` |
+| Принудительно npm install | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -ForceInstall` | `./start.sh --force-install` |
+| Принудительно build | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -ForceBuild` | `./start.sh --force-build` |
+
+Запуск на других портах:
 
 ```bash
-./start.sh --update-repo
+./start.sh --backend-port 18000 --frontend-port 18001
 ```
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -UpdateRepo
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -BackendPort 18000 -FrontendPort 18001
 ```
 
-Ручные frontend-команды:
+`--update-repo` / `-UpdateRepo` выполняет `git pull --ff-only`. Если есть локальные изменения или нужен merge/rebase, обновление надо сделать вручную.
+
+### Frontend
 
 ```bash
 npm ci
@@ -89,7 +121,9 @@ npm run lint
 npm run build
 ```
 
-Ручной backend-запуск на Linux:
+### Backend
+
+Linux:
 
 ```bash
 python3 -m venv .venv
@@ -97,7 +131,7 @@ python3 -m venv .venv
 .venv/bin/python -m uvicorn app.start:app --host 127.0.0.1 --port 8000
 ```
 
-Ручной backend-запуск на Windows:
+Windows:
 
 ```powershell
 py -3 -m venv .venv
@@ -107,25 +141,20 @@ py -3 -m venv .venv
 
 ## API
 
-Рабочие debug endpoints:
-
-- `GET /api/debug/check`
-- `POST /api/debug/check`
-- `PUT /api/debug/check`
-- `PATCH /api/debug/check`
-- `DELETE /api/debug/check`
-
-Проверка БД:
-
-- `GET /api/db/check_connect`
+| Method | Path | Назначение |
+| --- | --- | --- |
+| `GET` | `/api/debug/check` | Проверка GET |
+| `POST` | `/api/debug/check` | Проверка POST |
+| `PUT` | `/api/debug/check` | Проверка PUT |
+| `PATCH` | `/api/debug/check` | Проверка PATCH |
+| `DELETE` | `/api/debug/check` | Проверка DELETE |
+| `GET` | `/api/db/check_connect` | Проверка подключения к БД |
 
 Если PostgreSQL не запущен, `/api/db/check_connect` вернет ошибку подключения. Это ожидаемо и не мешает запуску приложения.
 
-## .env
+## Переменные окружения
 
 `.env` не хранится в git. Если файла нет, стартовый скрипт создаст dev-вариант.
-
-Минимальный пример:
 
 ```env
 APP_NAME=MessengerAPI
@@ -141,7 +170,23 @@ BUILD_ID=dev
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
-## Архитектура
+Перед публичным deploy надо заменить `JWT_SECRET`, `DATABASE_URL` и другие значения окружения на реальные.
+
+## База данных
+
+PostgreSQL пока не запускается автоматически. В `start.ps1` и `start.sh` есть закомментированная заготовка для Docker и Docker Compose.
+
+Ожидаемая dev-строка подключения:
+
+```text
+postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+```
+
+Пока БД не запущена, `/api/debug/check` должен работать, а `/api/db/check_connect` ожидаемо вернет ошибку подключения.
+
+## Диаграммы
+
+### Архитектура
 
 ```mermaid
 flowchart LR
@@ -152,9 +197,9 @@ flowchart LR
     Debug -->|OpenAPI + probes| Backend
 ```
 
-## ERD
+### ERD
 
-Планируемая модель данных для мессенджера:
+Планируемая модель данных:
 
 ```mermaid
 erDiagram
@@ -190,9 +235,7 @@ erDiagram
     USERS ||--o{ MESSAGES : sends
 ```
 
-## UML
-
-Высокоуровневые компоненты:
+### UML
 
 ```mermaid
 classDiagram
@@ -222,9 +265,7 @@ classDiagram
     DatabaseSession --> PostgreSQL
 ```
 
-## BPMN / процесс
-
-Упрощенный пользовательский процесс:
+### BPMN-like процесс
 
 ```mermaid
 flowchart TD
@@ -240,6 +281,8 @@ flowchart TD
     DeliverMessage --> End([End])
 ```
 
-## Текущее ограничение
+## Текущее состояние
 
-Регистрация, логин, реальные сообщения и WebSocket-чат пока не реализованы. Сейчас проект подготовлен как чистая стартовая база: frontend, backend, debug API, окружение и скрипты запуска.
+Сейчас реализованы frontend-заготовка, FastAPI-приложение, debug API, проверка подключения к БД и скрипты запуска.
+
+Регистрация, логин, реальные сообщения и WebSocket-чат пока не реализованы.
