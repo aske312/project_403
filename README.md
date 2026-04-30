@@ -1,266 +1,245 @@
-# 📌 Проект: MVP мессенджер (1-на-1)
+# Project_403
 
----
+MVP-заготовка приватного мессенджера.
 
-## 1. 🎯 Бизнес-задача
+В проекте есть:
 
-Разработать минимально жизнеспособный продукт (MVP) мессенджера для обмена сообщениями между двумя пользователями в реальном времени.
+- React/Vite frontend;
+- FastAPI backend;
+- debug-страница для проверки API;
+- заготовка подключения к PostgreSQL;
+- стартовые скрипты для Windows и Ubuntu/Linux.
 
-### Цель:
+Подробная памятка по запуску: [RUNBOOK.md](RUNBOOK.md).
 
-* Проверить работоспособность решения
-* Создать фундамент для дальнейшего развития
-* Минимизировать затраты на разработку и инфраструктуру
+## Быстрый старт
 
----
+### Windows
 
-## 2. 🧑‍💻 Пользовательские сценарии (User Flow)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
 
-### Основные:
+### Ubuntu/Linux
 
-1. Пользователь регистрируется
-2. Пользователь авторизуется
-3. Пользователь видит список пользователей
-4. Пользователь открывает чат
-5. Пользователь отправляет сообщение
-6. Второй пользователь получает сообщение в реальном времени
+```bash
+chmod +x ./start.sh
+./start.sh
+```
 
----
+Скрипты сами подготовят окружение: создадут `.env`, `.venv`, установят Python/npm-зависимости и запустят backend + frontend.
 
-## 3. 📦 Область реализации (Scope MVP)
+## Адреса
 
-### Включено:
+- Frontend: http://127.0.0.1:5173
+- Debug UI: http://127.0.0.1:5173/debug
+- Backend: http://127.0.0.1:8000
+- FastAPI docs: http://127.0.0.1:8000/docs
 
-* Регистрация и авторизация
-* Чат 1-на-1
-* Отправка и получение сообщений (real-time)
-* Хранение истории сообщений
+## Основные команды
 
-### Исключено (Backlog):
+Установить зависимости и запустить проект:
 
-* Группы
-* Файлы
-* Звонки
-* End-to-End шифрование
-* Push-уведомления
+```bash
+./start.sh
+```
 
----
+Windows:
 
-## 4. 🏗 Архитектура решения
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
 
-### Подход:
+Только подготовить окружение:
 
-**Монолитная архитектура с разделением слоёв**
+```bash
+./start.sh --install-only
+```
 
----
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -InstallOnly
+```
 
-## 5. 📊 Диаграмма системы
+Проверить/обновить frontend-сборку:
 
-```mermaid id="v2c8t1"
+```bash
+./start.sh --build-only
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -BuildOnly
+```
+
+Обновить репозиторий перед запуском:
+
+```bash
+./start.sh --update-repo
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -UpdateRepo
+```
+
+Ручные frontend-команды:
+
+```bash
+npm ci
+npm run dev
+npm run lint
+npm run build
+```
+
+Ручной backend-запуск на Linux:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.start:app --host 127.0.0.1 --port 8000
+```
+
+Ручной backend-запуск на Windows:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.start:app --host 127.0.0.1 --port 8000
+```
+
+## API
+
+Рабочие debug endpoints:
+
+- `GET /api/debug/check`
+- `POST /api/debug/check`
+- `PUT /api/debug/check`
+- `PATCH /api/debug/check`
+- `DELETE /api/debug/check`
+
+Проверка БД:
+
+- `GET /api/db/check_connect`
+
+Если PostgreSQL не запущен, `/api/db/check_connect` вернет ошибку подключения. Это ожидаемо и не мешает запуску приложения.
+
+## .env
+
+`.env` не хранится в git. Если файла нет, стартовый скрипт создаст dev-вариант.
+
+Минимальный пример:
+
+```env
+APP_NAME=MessengerAPI
+ENV=development
+DEBUG=True
+HOST=0.0.0.0
+PORT=8000
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+JWT_SECRET=change_me_before_public_deploy
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+BUILD_ID=dev
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+## Архитектура
+
+```mermaid
+flowchart LR
+    Browser[Browser] --> Frontend[React/Vite]
+    Frontend -->|HTTP| Backend[FastAPI]
+    Backend -->|asyncpg / SQLAlchemy| DB[(PostgreSQL)]
+    Frontend --> Debug[/Debug UI/]
+    Debug -->|OpenAPI + probes| Backend
+```
+
+## ERD
+
+Планируемая модель данных для мессенджера:
+
+```mermaid
+erDiagram
+    USERS {
+        int id PK
+        string email UK
+        string name
+        string password_hash
+        datetime created_at
+    }
+
+    CHATS {
+        int id PK
+        datetime created_at
+    }
+
+    CHAT_MEMBERS {
+        int chat_id FK
+        int user_id FK
+    }
+
+    MESSAGES {
+        int id PK
+        int chat_id FK
+        int sender_id FK
+        text body
+        datetime created_at
+    }
+
+    USERS ||--o{ CHAT_MEMBERS : joins
+    CHATS ||--o{ CHAT_MEMBERS : contains
+    CHATS ||--o{ MESSAGES : has
+    USERS ||--o{ MESSAGES : sends
+```
+
+## UML
+
+Высокоуровневые компоненты:
+
+```mermaid
+classDiagram
+    class ReactApp {
+        +Home
+        +Debug
+    }
+
+    class FastAPIApp {
+        +debugRouter
+        +dbRouter
+    }
+
+    class Config {
+        +APP_NAME
+        +DATABASE_URL
+        +JWT_SECRET
+    }
+
+    class DatabaseSession {
+        +engine
+    }
+
+    ReactApp --> FastAPIApp : HTTP
+    FastAPIApp --> Config
+    FastAPIApp --> DatabaseSession
+    DatabaseSession --> PostgreSQL
+```
+
+## BPMN / процесс
+
+Упрощенный пользовательский процесс:
+
+```mermaid
 flowchart TD
-
-    Client[Web Client]
-    API[FastAPI Backend]
-    DB[(PostgreSQL)]
-    WS[WebSocket Layer]
-
-    Client -->|HTTP| API
-    Client -->|WebSocket| WS
-    API --> DB
-    WS --> DB
+    Start([Start]) --> OpenApp[Open app]
+    OpenApp --> HasAccount{Has account?}
+    HasAccount -->|Yes| Login[Sign in]
+    HasAccount -->|No| Register[Create account]
+    Register --> Login
+    Login --> OpenChat[Open chat]
+    OpenChat --> SendMessage[Send message]
+    SendMessage --> SaveMessage[Save message to DB]
+    SaveMessage --> DeliverMessage[Deliver to recipient]
+    DeliverMessage --> End([End])
 ```
 
----
+## Текущее ограничение
 
-## 6. 🧩 Компоненты системы
-
-### 6.1 Клиент (Frontend)
-
-* Web-приложение (React)
-* Отвечает за UI и взаимодействие с API/WebSocket
-
----
-
-### 6.2 Backend
-
-* FastAPI
-* Обрабатывает:
-
-  * HTTP-запросы (REST API)
-  * WebSocket соединения
-  * бизнес-логику
-
----
-
-### 6.3 База данных
-
-* PostgreSQL
-* Хранение пользователей и сообщений
-
----
-
-## 7. 🔌 Коммуникации
-
-### HTTP API:
-
-* `/auth/register`
-* `/auth/login`
-* `/users`
-* `/messages/history`
-
----
-
-### WebSocket:
-
-* `/ws/chat`
-
-#### События:
-
-* `send_message`
-* `receive_message`
-
----
-
-## 8. 🗄 Модель данных (обзор)
-
-### Таблицы:
-
-* users
-* messages
-
----
-
-## 9. 🔐 Безопасность
-
-### Реализуется:
-
-* HTTPS / WSS
-* JWT авторизация
-* Хеширование паролей (bcrypt)
-* Проверка доступа к сообщениям
-
----
-
-### Не реализуется (на этапе MVP):
-
-* End-to-End шифрование
-* Сложные криптопротоколы
-
----
-
-## 10. ⚙️ Технический стек
-
-### Backend:
-
-* Python
-* FastAPI
-
-### База данных:
-
-* PostgreSQL
-
-### Клиент:
-
-* React
-
-### Протоколы:
-
-* HTTP (REST)
-* WebSocket
-
----
-
-## 11. 🚀 Развёртывание (MVP)
-
-### Инфраструктура:
-
-* 1 VPS сервер
-* Backend + DB на одном сервере
-
----
-
-### Минимальные требования:
-
-* Linux сервер
-* Docker (опционально)
-
----
-
-## 12. 📐 Внутренняя структура backend
-
-```bash id="k3m91x"
-/app
-  /api
-  /models
-  /schemas
-  /services
-  /ws
-  /setting
-```
-
----
-
-## 13. 🔄 Поток данных (Sequence)
-
-```mermaid id="n4x7qa"
-sequenceDiagram
-
-    participant A as User A
-    participant WS as WebSocket Server
-    participant DB as Database
-    participant B as User B
-
-    A->>WS: send_message
-    WS->>DB: save message
-    WS->>B: deliver message
-```
-
----
-
-## 14. 📏 Критерии готовности (Definition of Done)
-
-* Пользователь может зарегистрироваться
-* Пользователь может войти
-* Сообщения отправляются и принимаются в реальном времени
-* Сообщения сохраняются в базе данных
-* Второй пользователь получает сообщение без обновления страницы
-
----
-
-## 15. ⚠️ Ограничения
-
-* Один сервер
-* Нет масштабирования
-* Ограниченное количество пользователей
-
----
-
-## 16. 🧠 Ключевые решения
-
-* Монолит вместо микросервисов
-* WebSocket вместо polling
-* PostgreSQL как основная БД
-* Минимальная безопасность без перегрузки
-
----
-
-## 17. ▶️ План перехода к реализации
-
-1. Инициализация проекта (backend)
-2. Настройка базы данных
-3. Реализация авторизации
-4. Реализация WebSocket
-5. Реализация чата
-6. Тестирование (ручное)
-
----
-
-## 18. 📌 Результат
-
-На выходе:
-
-* Рабочий мессенджер (1-на-1)
-* Готовая архитектурная база
-* Основа для масштабирования
-
----
+Регистрация, логин, реальные сообщения и WebSocket-чат пока не реализованы. Сейчас проект подготовлен как чистая стартовая база: frontend, backend, debug API, окружение и скрипты запуска.
