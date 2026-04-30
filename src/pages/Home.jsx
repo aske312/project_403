@@ -29,7 +29,7 @@ const copy = {
     statusLogin: "\u0424\u043e\u0440\u043c\u0430 \u0433\u043e\u0442\u043e\u0432\u0430. \u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 /auth/login, \u043a\u043e\u0433\u0434\u0430 backend \u0431\u0443\u0434\u0435\u0442 \u0440\u0435\u0430\u043b\u0438\u0437\u043e\u0432\u0430\u043d.",
     statusRegister: "\u0424\u043e\u0440\u043c\u0430 \u0433\u043e\u0442\u043e\u0432\u0430. \u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 /auth/register, \u043a\u043e\u0433\u0434\u0430 backend \u0431\u0443\u0434\u0435\u0442 \u0440\u0435\u0430\u043b\u0438\u0437\u043e\u0432\u0430\u043d.",
     footerStatus: "\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0432 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
-    footerApi: "\u0421\u0442\u0430\u0442\u0443\u0441 API",
+    footerApi: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -64,7 +64,7 @@ const copy = {
     statusLogin: "Form is ready. Connect /auth/login after the backend is implemented.",
     statusRegister: "Form is ready. Connect /auth/register after the backend is implemented.",
     footerStatus: "Application in development",
-    footerApi: "API status",
+    footerApi: "Admin panel",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -96,7 +96,7 @@ export default function Home() {
 
     async function loadProjectName() {
       try {
-        const response = await fetch(`${API_URL}/api/debug/health`);
+        const response = await fetch(`${API_URL}/api/admin/health`);
         const payload = await response.json();
         if (!ignore && payload.app) {
           setProjectName(payload.app);
@@ -254,7 +254,7 @@ export default function Home() {
         </div>
 
         <nav className="footer-links" aria-label="Footer">
-          <a href="/debug">{t.footerApi}</a>
+          <a href="/admin">{t.footerApi}</a>
           <a href="https://github.com/aske312/project_403/blob/master/README.md">{t.github}</a>
           <a href="https://vk.com/aske312">{t.vk}</a>
           <a href="https://t.me/aske312">{t.telegram}</a>

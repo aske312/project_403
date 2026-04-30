@@ -6,7 +6,7 @@ import {
 } from "react-router-dom";
 
 import Home from "./pages/Home";
-import Debug from "./pages/Debug";
+import Admin from "./pages/Admin";
 
 const router = createBrowserRouter([
   {
@@ -14,8 +14,8 @@ const router = createBrowserRouter([
     element: <Home />,
   },
   {
-    path: "/debug",
-    element: <Debug />,
+    path: "/admin",
+    element: <Admin />,
   },
 ]);
 

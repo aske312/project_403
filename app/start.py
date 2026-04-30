@@ -4,10 +4,11 @@ import time
 
 from app.setting.config import parameters as param
 from app.api.db import router as api_db
-from app.api.debug import router as api_debug
+from app.api.admin import router as api_admin
 from app.db.session import get_public_database_url, init_db
-from app.logging_config import setup_logging
+from app.logging_config import get_request_resource, setup_logging, write_request_log
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ app = FastAPI(
     version=param.VERSION
 )
 
-app.include_router(api_debug)
+app.include_router(api_admin)
 app.include_router(api_db)
 app.add_middleware(
     CORSMiddleware,
@@ -34,8 +35,39 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request, call_next):
     started = time.perf_counter()
+    request_body = await request.body()
     response = await call_next(request)
     duration_ms = (time.perf_counter() - started) * 1000
+    response_body = b""
+
+    async for chunk in response.body_iterator:
+        response_body += chunk
+
+    headers = dict(response.headers)
+    content_type = headers.get("content-type", "")
+    request_text = request_body.decode("utf-8", errors="replace")
+    response_text = response_body.decode("utf-8", errors="replace")
+    resource = get_request_resource(request.url.path)
+
+    write_request_log(
+        resource,
+        {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "resource": resource,
+            "request": {
+                "method": request.method,
+                "path": request.url.path,
+                "query": str(request.url.query),
+                "body": request_text[:10000],
+            },
+            "response": {
+                "status_code": response.status_code,
+                "content_type": content_type,
+                "body": response_text[:10000],
+            },
+            "duration_ms": round(duration_ms, 1),
+        },
+    )
     logger.info(
         "%s %s -> %s %.1fms",
         request.method,
@@ -43,7 +75,13 @@ async def log_requests(request, call_next):
         response.status_code,
         duration_ms,
     )
-    return response
+    return Response(
+        content=response_body,
+        status_code=response.status_code,
+        headers=headers,
+        media_type=response.media_type,
+        background=response.background,
+    )
 
 
 @app.on_event("startup")

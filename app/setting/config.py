@@ -48,6 +48,7 @@ class Parameters:
 
     # Logging
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
+    LOG_DIR = os.getenv("LOG_DIR", "logs")
     LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", 1024 * 1024))
     LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", 3))
 

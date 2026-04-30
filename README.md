@@ -1,6 +1,6 @@
 # Project_403
 
-MVP-заготовка приватного мессенджера: React/Vite frontend, FastAPI backend, debug UI и PostgreSQL-схема на будущее.
+MVP-заготовка приватного мессенджера: React/Vite frontend, FastAPI backend, admin UI и PostgreSQL-схема на будущее.
 
 ## Навигация
 
@@ -108,7 +108,7 @@ curl -X POST http://127.0.0.1:8000/api/db/init
 | Назначение | URL |
 | --- | --- |
 | Frontend | http://127.0.0.1:5173 |
-| Debug UI | http://127.0.0.1:5173/debug |
+| Admin UI | http://127.0.0.1:5173/admin |
 | Backend | http://127.0.0.1:8000 |
 | FastAPI docs | http://127.0.0.1:8000/docs |
 
@@ -168,13 +168,14 @@ py -3 -m venv .venv
 
 | Method | Path | Назначение |
 | --- | --- | --- |
-| `GET` | `/api/debug/health` | Runtime status: version, env, branch, backend stack |
-| `GET` | `/api/debug/logs/app` | Download application log |
-| `GET` | `/api/debug/check` | Проверка GET |
-| `POST` | `/api/debug/check` | Проверка POST |
-| `PUT` | `/api/debug/check` | Проверка PUT |
-| `PATCH` | `/api/debug/check` | Проверка PATCH |
-| `DELETE` | `/api/debug/check` | Проверка DELETE |
+| `GET` | `/api/admin/health` | Runtime status: version, env, branch, backend stack |
+| `GET` | `/api/admin/logs` | Список файлов логов |
+| `GET` | `/api/admin/logs/{date}/{file}` | Скачать файл лога |
+| `GET` | `/api/admin/check` | Проверка GET |
+| `POST` | `/api/admin/check` | Проверка POST |
+| `PUT` | `/api/admin/check` | Проверка PUT |
+| `PATCH` | `/api/admin/check` | Проверка PATCH |
+| `DELETE` | `/api/admin/check` | Проверка DELETE |
 | `GET` | `/api/db/check_connect` | Проверка подключения к БД |
 | `POST` | `/api/db/init` | Создание таблиц |
 
@@ -214,8 +215,8 @@ flowchart LR
     Browser[Browser] --> Frontend[React/Vite]
     Frontend -->|HTTP| Backend[FastAPI]
     Backend -->|asyncpg / SQLAlchemy| DB[(PostgreSQL)]
-    Frontend --> Debug[/Debug UI/]
-    Debug -->|OpenAPI + probes| Backend
+    Frontend --> Admin[/Admin UI/]
+    Admin -->|OpenAPI + probes| Backend
 ```
 
 ### ERD
@@ -263,11 +264,11 @@ erDiagram
 classDiagram
     class ReactApp {
         +Home
-        +Debug
+        +Admin
     }
 
     class FastAPIApp {
-        +debugRouter
+        +adminRouter
         +dbRouter
     }
 
@@ -313,6 +314,6 @@ flowchart TD
 
 ## Текущее состояние
 
-Сейчас реализованы frontend-заготовка, FastAPI-приложение, debug API, PostgreSQL Docker Compose, SQLAlchemy-модели и автоматическое создание базовых таблиц.
+Сейчас реализованы frontend-заготовка, FastAPI-приложение, admin API, PostgreSQL Docker Compose, SQLAlchemy-модели и автоматическое создание базовых таблиц.
 
 Регистрация, логин, реальные сообщения и WebSocket-чат пока не реализованы.

@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import "../styles/debug.css";
+import "../styles/admin.css";
 import Endpoint from "../components/Endpoint";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const LOG_DOWNLOAD_URL = `${API_URL}/api/debug/logs/app`;
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 
 const fallbackEndpoints = [
-  { method: "GET", path: "/api/debug/health" },
-  { method: "GET", path: "/api/debug/logs/app" },
-  { method: "GET", path: "/api/debug/check" },
-  { method: "POST", path: "/api/debug/check" },
-  { method: "PUT", path: "/api/debug/check" },
-  { method: "PATCH", path: "/api/debug/check" },
-  { method: "DELETE", path: "/api/debug/check" },
+  { method: "GET", path: "/api/admin/health" },
+  { method: "GET", path: "/api/admin/logs" },
+  { method: "GET", path: "/api/admin/check" },
+  { method: "POST", path: "/api/admin/check" },
+  { method: "PUT", path: "/api/admin/check" },
+  { method: "PATCH", path: "/api/admin/check" },
+  { method: "DELETE", path: "/api/admin/check" },
   { method: "GET", path: "/api/db/check_connect" },
   { method: "POST", path: "/api/db/init" },
 ];
@@ -49,7 +48,9 @@ const copy = {
     unavailable: "Unavailable",
     checking: "Checking...",
     apiSurface: "API surface",
-    downloadLog: "Download log",
+    logs: "Logs",
+    noLogs: "No logs yet",
+    download: "Download",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -73,7 +74,9 @@ const copy = {
     unavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d",
     checking: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430...",
     apiSurface: "API",
-    downloadLog: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c \u043b\u043e\u0433",
+    logs: "\u041b\u043e\u0433\u0438",
+    noLogs: "\u041b\u043e\u0433\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
+    download: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -138,12 +141,23 @@ function StatusPill({ state, label }) {
   );
 }
 
-export default function Debug() {
+function formatBytes(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatLogTime(value) {
+  return new Date(value * 1000).toLocaleString();
+}
+
+export default function Admin() {
   const [theme, setTheme] = useState("dark");
   const [lang, setLang] = useState("RU");
   const [endpoints, setEndpoints] = useState(fallbackEndpoints);
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
+  const [logs, setLogs] = useState([]);
 
   const t = copy[lang];
   const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
@@ -170,7 +184,7 @@ export default function Debug() {
 
     async function loadBackend() {
       try {
-        const response = await fetch(`${API_URL}/api/debug/health`);
+        const response = await fetch(`${API_URL}/api/admin/health`);
         const payload = await response.json();
         if (!ignore) setBackend(payload);
       } catch (error) {
@@ -188,9 +202,20 @@ export default function Debug() {
       }
     }
 
+    async function loadLogs() {
+      try {
+        const response = await fetch(`${API_URL}/api/admin/logs`);
+        const payload = await response.json();
+        if (!ignore) setLogs(payload.logs || []);
+      } catch {
+        if (!ignore) setLogs([]);
+      }
+    }
+
     loadOpenApi();
     loadBackend();
     loadDatabase();
+    loadLogs();
 
     return () => {
       ignore = true;
@@ -229,16 +254,16 @@ export default function Debug() {
   }, [backend, database, t]);
 
   return (
-    <div className={`debug-page ${theme}`}>
-      <header className="debug-topbar">
-        <a className="debug-brand" href="/">
-          <span className="debug-brand-mark">{getInitials(projectName)}</span>
+    <div className={`admin-page ${theme}`}>
+      <header className="admin-topbar">
+        <a className="admin-brand" href="/">
+          <span className="admin-brand-mark">{getInitials(projectName)}</span>
           <span>{projectName}</span>
         </a>
 
-        <div className="debug-actions">
+        <div className="admin-actions">
           <button
-            className="debug-flag-switch"
+            className="admin-flag-switch"
             type="button"
             onClick={() => setLang(lang === "RU" ? "EN" : "RU")}
             aria-label={t.language}
@@ -249,23 +274,23 @@ export default function Debug() {
           </button>
 
           <button
-            className="debug-control"
+            className="admin-control"
             type="button"
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
           >
             {theme === "light" ? t.themeDark : t.themeLight}
           </button>
 
-          <a className="debug-home-link" href="/">
+          <a className="admin-home-link" href="/">
             {t.home}
           </a>
         </div>
       </header>
 
-      <main className="debug-layout">
+      <main className="admin-layout">
         <section className="service-hero">
           <div>
-            <p className="debug-eyebrow">{t.pageName}</p>
+            <p className="admin-eyebrow">{t.pageName}</p>
             <h1>{t.pageTitle}</h1>
             <p>{t.pageSubtitle}</p>
           </div>
@@ -279,16 +304,6 @@ export default function Debug() {
               <span>{t.buildVersion}</span>
               <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
             </div>
-            <a
-              className="runtime-log-link"
-              href={LOG_DOWNLOAD_URL}
-              download
-              title={t.downloadLog}
-              aria-label={t.downloadLog}
-            >
-              <span className="log-download-icon" aria-hidden="true" />
-              <span>{t.downloadLog}</span>
-            </a>
           </div>
         </section>
 
@@ -333,9 +348,35 @@ export default function Debug() {
             ))}
           </div>
         </section>
+
+        <section className="logs-section" aria-label={t.logs}>
+          <div className="section-head">
+            <h2>{t.logs}</h2>
+            <span>{logs.length}</span>
+          </div>
+
+          <div className="log-list">
+            {logs.length === 0 ? (
+              <div className="empty-log-list">{t.noLogs}</div>
+            ) : (
+              logs.map((log) => (
+                <div className="log-row" key={`${log.date}-${log.file}`}>
+                  <div>
+                    <strong>{log.file}</strong>
+                    <span>{log.resource} · {formatLogTime(log.updated_at)}</span>
+                  </div>
+                  <span>{formatBytes(log.size)}</span>
+                  <a href={`${API_URL}${log.download_url}`} download>
+                    {t.download}
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       </main>
 
-      <footer className="debug-footer">
+      <footer className="admin-footer">
         <div className="footer-status">
           <span className={`status-dot ${env.state}`} aria-hidden="true" />
           <span>{env.label}</span>

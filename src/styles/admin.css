@@ -14,7 +14,7 @@ button {
   font: inherit;
 }
 
-.debug-page {
+.admin-page {
   --bg-start: #f7f9fc;
   --bg-mid: #eef3f8;
   --bg-end: #f8faf7;
@@ -55,7 +55,7 @@ button {
     linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 48%, var(--bg-end) 100%);
 }
 
-.debug-page.dark {
+.admin-page.dark {
   --bg-start: #10141d;
   --bg-mid: #171b24;
   --bg-end: #111827;
@@ -86,7 +86,7 @@ button {
   --danger-text: #fca5a5;
 }
 
-.debug-topbar {
+.admin-topbar {
   min-height: 72px;
   display: flex;
   align-items: center;
@@ -95,21 +95,21 @@ button {
   padding: 18px clamp(18px, 4vw, 56px);
 }
 
-.debug-brand,
-.debug-home-link,
+.admin-brand,
+.admin-home-link,
 .footer-links a {
   color: inherit;
   text-decoration: none;
 }
 
-.debug-brand {
+.admin-brand {
   display: flex;
   align-items: center;
   gap: 12px;
   font-weight: 700;
 }
 
-.debug-brand-mark {
+.admin-brand-mark {
   width: 40px;
   height: 40px;
   display: grid;
@@ -120,7 +120,7 @@ button {
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.28);
 }
 
-.debug-actions {
+.admin-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -128,13 +128,15 @@ button {
   flex-wrap: wrap;
 }
 
-.debug-home-link,
-.debug-control,
-.debug-flag-switch,
-.runtime-log-link {
+.admin-home-link,
+.admin-control,
+.admin-flag-switch {
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
+  padding: 0 14px;
   border: 1px solid var(--border);
+  border-radius: 8px;
   color: inherit;
   background: var(--surface);
   cursor: pointer;
@@ -142,20 +144,12 @@ button {
   text-decoration: none;
 }
 
-.debug-home-link,
-.debug-control,
-.debug-flag-switch {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 8px;
-}
-
-.debug-flag-switch {
+.admin-flag-switch {
   gap: 9px;
   padding: 0 12px 0 8px;
 }
 
-.debug-flag-switch img {
+.admin-flag-switch img {
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -163,7 +157,7 @@ button {
   box-shadow: 0 0 0 1px var(--border);
 }
 
-.debug-layout {
+.admin-layout {
   width: min(1120px, calc(100% - 36px));
   flex: 1;
   display: grid;
@@ -175,7 +169,8 @@ button {
 .service-hero,
 .services-section,
 .api-section,
-.debug-footer {
+.logs-section,
+.admin-footer {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -191,7 +186,7 @@ button {
   padding: 24px;
 }
 
-.debug-eyebrow {
+.admin-eyebrow {
   margin: 0 0 10px;
   color: var(--primary-text);
   font-size: 12px;
@@ -224,61 +219,12 @@ button {
   background: var(--surface-strong);
 }
 
-.status-panel .runtime-log-link {
-  min-height: 38px;
-  justify-content: center;
-  justify-self: stretch;
-  gap: 9px;
-  padding: 0 14px;
-  border-color: var(--border);
-  border-radius: 999px;
-  color: var(--neutral-text);
-  background: var(--neutral-soft);
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.status-panel .runtime-log-link:hover {
-  border-color: var(--neutral);
-  background: var(--surface-muted);
-}
-
 .status-panel-head,
 .status-version {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.log-download-icon {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.log-download-icon::before {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 2px;
-  width: 2px;
-  height: 9px;
-  border-radius: 2px;
-  background: currentColor;
-}
-
-.log-download-icon::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 7px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
 }
 
 .status-panel-head > span,
@@ -390,7 +336,8 @@ button {
 }
 
 .services-section,
-.api-section {
+.api-section,
+.logs-section {
   padding: 18px;
 }
 
@@ -656,7 +603,77 @@ button {
   font-weight: 800;
 }
 
-.debug-footer {
+.log-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 112px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.log-row:first-child {
+  border-top: 0;
+}
+
+.log-row strong,
+.log-row span {
+  min-width: 0;
+}
+
+.log-row strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-row div span,
+.log-row > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.log-row a {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--neutral-text);
+  background: var(--neutral-soft);
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.log-row a:hover {
+  border-color: var(--neutral);
+  background: var(--surface-muted);
+}
+
+.empty-log-list {
+  padding: 18px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-footer {
   width: min(1120px, calc(100% - 36px));
   min-height: 64px;
   display: flex;
@@ -705,21 +722,25 @@ button {
   .service-row {
     gap: 10px;
   }
+
+  .log-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
-  .debug-layout,
-  .debug-footer {
+  .admin-layout,
+  .admin-footer {
     width: min(100% - 24px, 1120px);
   }
 
-  .debug-topbar,
-  .debug-footer {
+  .admin-topbar,
+  .admin-footer {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .debug-actions {
+  .admin-actions {
     width: 100%;
     justify-content: flex-start;
   }
