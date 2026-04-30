@@ -27,16 +27,13 @@ export default function Endpoint({ method, path }) {
     if (data) return;
 
     try {
-      const res = await fetch(`${API_URL}${path}`, {
-        method,
-      });
-
+      const res = await fetch(`${API_URL}${path}`, { method });
       const headers = {};
       res.headers.forEach((v, k) => (headers[k] = v));
 
       const body = await res.json();
 
-      const result = {
+      setData({
         request: {
           method,
           url: `${API_URL}${path}`,
@@ -47,11 +44,8 @@ export default function Endpoint({ method, path }) {
           headers,
           body,
         },
-      };
-
-      setData(result);
+      });
       setStatus(res.status);
-
     } catch (e) {
       setData({ error: e.message });
       setStatus("ERR");
@@ -62,31 +56,25 @@ export default function Endpoint({ method, path }) {
 
   return (
     <div className="endpoint">
-
-      {/* HEADER */}
-      <div className="endpoint-header" onClick={run}>
-
-        <div className="endpoint-left">
+      <button className="endpoint-header" type="button" onClick={run}>
+        <span className="endpoint-left">
           <span className={`method ${method}`}>{method}</span>
           <span className="url">{path}</span>
-        </div>
+        </span>
 
-        <div className="endpoint-right">
+        <span className="endpoint-right">
           {status && (
             <span className={`status-badge ${isOk ? "ok" : "error"}`}>
               {status}
             </span>
           )}
 
-          <span className={`arrow ${open ? "open" : ""}`}>▶</span>
-        </div>
+          <span className={`arrow ${open ? "open" : ""}`} aria-hidden="true" />
+        </span>
+      </button>
 
-      </div>
-
-      {/* CONTENT */}
       {open && data && (
         <div className="endpoint-content">
-
           {data.error ? (
             <div className="error">{data.error}</div>
           ) : (
@@ -103,7 +91,7 @@ export default function Endpoint({ method, path }) {
 
                 <KV obj={data.response.headers} />
 
-                <div style={{ marginTop: 10 }}>
+                <div className="json-wrap">
                   <pre className="json">
                     {JSON.stringify(data.response.body, null, 2)}
                   </pre>
@@ -111,10 +99,8 @@ export default function Endpoint({ method, path }) {
               </div>
             </>
           )}
-
         </div>
       )}
-
     </div>
   );
 }
