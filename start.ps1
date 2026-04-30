@@ -5,6 +5,8 @@ param(
     [switch]$SkipSystemDeps,
     [switch]$SkipInstall,
     [switch]$SkipBuild,
+    [switch]$StartDb,
+    [switch]$DbOnly,
     [switch]$InstallOnly,
     [switch]$BuildOnly,
     [switch]$ForceInstall,
@@ -44,6 +46,58 @@ function Install-WingetPackage {
 
     Write-Step "Installing $CommandName"
     Invoke-Checked "winget" @("install", "--id", $PackageId, "-e", "--accept-package-agreements", "--accept-source-agreements")
+}
+
+function Install-Docker {
+    if (Test-Command "docker") {
+        return
+    }
+
+    if ($SkipSystemDeps) {
+        throw "Docker is not installed or is not available in PATH."
+    }
+
+    if ($IsWin) {
+        Install-WingetPackage "docker" "Docker.DockerDesktop"
+
+        if (Test-Command "docker") {
+            return
+        }
+
+        $dockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+        if (Test-Path $dockerDesktop) {
+            Write-Step "Starting Docker Desktop"
+            Start-Process -FilePath $dockerDesktop -WindowStyle Hidden
+        }
+
+        throw "Docker Desktop was installed, but docker is not available in this shell yet. Open a new PowerShell session and start Docker Desktop, then run this command again."
+    }
+
+    if (-not (Test-Command "apt-get")) {
+        throw "Docker auto-install is supported only on Windows with winget or apt-based Linux."
+    }
+
+    Write-Step "Installing Docker Engine"
+    $sudo = if ((id -u) -eq "0") { "" } else { "sudo" }
+    if ($sudo) {
+        Invoke-Checked $sudo @("apt-get", "update")
+        Invoke-Checked $sudo @("apt-get", "install", "-y", "ca-certificates", "curl")
+        Invoke-Checked $sudo @("install", "-m", "0755", "-d", "/etc/apt/keyrings")
+        Invoke-Checked $sudo @("curl", "-fsSL", "https://download.docker.com/linux/ubuntu/gpg", "-o", "/etc/apt/keyrings/docker.asc")
+        Invoke-Checked $sudo @("chmod", "a+r", "/etc/apt/keyrings/docker.asc")
+        Invoke-Checked "sh" @("-c", "echo `"deb [arch=`$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu `$(`. /etc/os-release && echo `"`$VERSION_CODENAME`") stable`" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null")
+        Invoke-Checked $sudo @("apt-get", "update")
+        Invoke-Checked $sudo @("apt-get", "install", "-y", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin")
+    } else {
+        Invoke-Checked "apt-get" @("update")
+        Invoke-Checked "apt-get" @("install", "-y", "ca-certificates", "curl")
+        Invoke-Checked "install" @("-m", "0755", "-d", "/etc/apt/keyrings")
+        Invoke-Checked "curl" @("-fsSL", "https://download.docker.com/linux/ubuntu/gpg", "-o", "/etc/apt/keyrings/docker.asc")
+        Invoke-Checked "chmod" @("a+r", "/etc/apt/keyrings/docker.asc")
+        Invoke-Checked "sh" @("-c", "echo `"deb [arch=`$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu `$(`. /etc/os-release && echo `"`$VERSION_CODENAME`") stable`" | tee /etc/apt/sources.list.d/docker.list > /dev/null")
+        Invoke-Checked "apt-get" @("update")
+        Invoke-Checked "apt-get" @("install", "-y", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin")
+    }
 }
 
 function Install-SystemDependencies {
@@ -144,6 +198,7 @@ function Ensure-EnvFile {
 APP_NAME=MessengerAPI
 ENV=development
 DEBUG=True
+AUTO_CREATE_TABLES=True
 
 # SERVER
 HOST=0.0.0.0
@@ -222,6 +277,17 @@ function Test-BuildOutdated {
     return $false
 }
 
+function Start-Database {
+    if (-not (Test-Path "docker-compose.yml")) {
+        throw "docker-compose.yml was not found."
+    }
+
+    Install-Docker
+
+    Write-Step "Starting PostgreSQL"
+    Invoke-Checked "docker" @("compose", "up", "-d", "db")
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
@@ -250,6 +316,15 @@ if ($UpdateRepo) {
 }
 
 Ensure-EnvFile
+
+if ($StartDb -or $DbOnly) {
+    Start-Database
+}
+
+if ($DbOnly) {
+    Write-Step "Database is ready"
+    exit 0
+}
 
 if (-not $SkipInstall) {
     if (-not (Test-Path $VenvPython)) {
@@ -295,20 +370,6 @@ if ($BuildOnly) {
     Write-Step "Build is ready"
     exit 0
 }
-
-# Database startup placeholder. Keep disabled until local DB orchestration is chosen.
-#
-# Docker example:
-# Write-Step "Starting PostgreSQL"
-# docker run --name messenger-postgres `
-#     -e POSTGRES_DB=messenger_db `
-#     -e POSTGRES_USER=postgres `
-#     -e POSTGRES_PASSWORD=password `
-#     -p 5432:5432 `
-#     -d postgres:16
-#
-# Docker Compose example:
-# docker compose up -d db
 
 Write-Step "Starting backend"
 $backendArgs = @(

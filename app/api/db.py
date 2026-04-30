@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from sqlalchemy import text
-from app.db.session import engine
+from app.db.models import Base
+from app.db.session import engine, init_db
 
 router = APIRouter()
 
@@ -15,7 +16,22 @@ async def check_connect():
             "status": "ok",
             "db_response": value
         }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
+
+@router.post("/api/db/init")
+async def initialize_database():
+    try:
+        await init_db()
+
+        return {
+            "status": "ok",
+            "tables": sorted(Base.metadata.tables.keys())
+        }
     except Exception as e:
         return {
             "status": "error",

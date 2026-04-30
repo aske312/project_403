@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.setting.config import parameters as param
 from app.api.db import router as api_db
 from app.api.debug import router as api_debug
+from app.db.session import init_db
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -21,3 +22,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup():
+    if not param.AUTO_CREATE_TABLES:
+        return
+
+    try:
+        await init_db()
+    except Exception as exc:
+        print(f"Database initialization skipped: {exc}")

@@ -23,6 +23,7 @@ class Parameters:
     VERSION = f"v {os.getenv('VERSION', '0.0.1')} build {get_build_id()}"
     ENV = os.getenv("ENV", "development")
     DEBUG = os.getenv("DEBUG", "False") == "True"
+    AUTO_CREATE_TABLES = os.getenv("AUTO_CREATE_TABLES", "True") == "True"
 
     # Server
     HOST = os.getenv("HOST", "0.0.0.0")

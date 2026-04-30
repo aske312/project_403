@@ -1,16 +1,15 @@
 # Project_403
 
-MVP-заготовка приватного мессенджера: React/Vite frontend, FastAPI backend, debug UI и подготовка к PostgreSQL.
+MVP-заготовка приватного мессенджера: React/Vite frontend, FastAPI backend, debug UI и PostgreSQL-схема на будущее.
 
 ## Навигация
 
 - [Быстрый старт](#быстрый-старт)
-- [Bootstrap на новом сервере](#bootstrap-на-новом-сервере)
+- [PostgreSQL](#postgresql)
 - [Адреса](#адреса)
 - [Команды](#команды)
 - [API](#api)
 - [Переменные окружения](#переменные-окружения)
-- [База данных](#база-данных)
 - [Диаграммы](#диаграммы)
 - [Текущее состояние](#текущее-состояние)
 
@@ -29,54 +28,78 @@ chmod +x ./start.sh
 ./start.sh
 ```
 
-Стартовые скрипты создают `.env`, `.venv`, устанавливают Python/npm-зависимости и запускают backend + frontend.
+Запуск вместе с PostgreSQL через Docker Compose:
 
-## Bootstrap на новом сервере
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb
+```
 
-`start.ps1` и `start.sh` можно запускать внутри уже склонированного проекта или как отдельный файл на новой машине.
+```bash
+./start.sh --start-db
+```
 
-Репозиторий по умолчанию:
+Стартовые скрипты создают `.env`, `.venv`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
+
+Docker нужен только для локального PostgreSQL. При запуске с БД скрипты проверяют Docker и пробуют установить его автоматически:
+
+- Windows: Docker Desktop через `winget`;
+- Ubuntu/Linux: Docker Engine из официального apt-репозитория Docker.
+
+После установки Docker Desktop на Windows может понадобиться открыть Docker Desktop, принять условия использования и запустить новую PowerShell-сессию.
+
+Если установка Docker Desktop на Windows завершается ошибкой, проверь:
+
+- PowerShell запущен с правами администратора;
+- включена виртуализация;
+- установлен WSL2 или доступен Hyper-V backend;
+- после установки Docker Desktop открыт хотя бы один раз.
+
+## PostgreSQL
+
+Для локальной БД добавлен [docker-compose.yml](docker-compose.yml).
+
+Если Docker не установлен, команды `-StartDb`, `-DbOnly`, `--start-db` и `--db-only` попробуют установить его автоматически. Автоустановка отключается через `-SkipSystemDeps` / `--skip-system-deps`.
+
+Поднять только PostgreSQL:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly
+```
+
+```bash
+./start.sh --db-only
+```
+
+Или напрямую:
+
+```bash
+docker compose up -d db
+```
+
+Параметры dev-БД:
 
 ```text
-https://github.com/aske312/project_403.git
+host: localhost
+port: 5432
+database: messenger_db
+user: postgres
+password: password
 ```
 
-Ubuntu/Linux bootstrap:
+Backend при старте пытается создать таблицы автоматически, если `AUTO_CREATE_TABLES=True`. Если БД недоступна, backend продолжит стартовать, а `/api/db/check_connect` покажет ошибку подключения.
+
+Создать таблицы вручную через API:
 
 ```bash
-chmod +x ./start.sh
-./start.sh
+curl -X POST http://127.0.0.1:8000/api/db/init
 ```
 
-Скрипт может установить через `apt-get`: `git`, `python3`, `python3-venv`, `python3-pip`, `curl`, `ca-certificates`. Если Node.js отсутствует или версия ниже 20, скрипт поставит Node.js 20 LTS через NodeSource. Для этого нужны интернет и права `sudo`.
+Создаваемые таблицы:
 
-Windows bootstrap:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
-```
-
-Скрипт может установить через `winget`: Git, Python и Node.js/npm. После установки через `winget` иногда нужно открыть новую PowerShell-сессию, чтобы обновился `PATH`.
-
-Другой репозиторий или каталог:
-
-```bash
-./start.sh --repo-url https://github.com/user/repo.git --project-dir my-app
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -RepoUrl https://github.com/user/repo.git -ProjectDir my-app
-```
-
-Не трогать системные зависимости:
-
-```bash
-./start.sh --skip-system-deps
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -SkipSystemDeps
-```
+- `users`
+- `chats`
+- `chat_members`
+- `messages`
 
 ## Адреса
 
@@ -94,6 +117,8 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -SkipSystemDeps
 | Действие | Windows | Ubuntu/Linux |
 | --- | --- | --- |
 | Запуск | `powershell -ExecutionPolicy Bypass -File .\start.ps1` | `./start.sh` |
+| Запуск с БД | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb` | `./start.sh --start-db` |
+| Только БД | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly` | `./start.sh --db-only` |
 | Только подготовка | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -InstallOnly` | `./start.sh --install-only` |
 | Проверить сборку | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -BuildOnly` | `./start.sh --build-only` |
 | Обновить repo | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -UpdateRepo` | `./start.sh --update-repo` |
@@ -109,8 +134,6 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -SkipSystemDeps
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -BackendPort 18000 -FrontendPort 18001
 ```
-
-`--update-repo` / `-UpdateRepo` выполняет `git pull --ff-only`. Если есть локальные изменения или нужен merge/rebase, обновление надо сделать вручную.
 
 ### Frontend
 
@@ -149,8 +172,7 @@ py -3 -m venv .venv
 | `PATCH` | `/api/debug/check` | Проверка PATCH |
 | `DELETE` | `/api/debug/check` | Проверка DELETE |
 | `GET` | `/api/db/check_connect` | Проверка подключения к БД |
-
-Если PostgreSQL не запущен, `/api/db/check_connect` вернет ошибку подключения. Это ожидаемо и не мешает запуску приложения.
+| `POST` | `/api/db/init` | Создание таблиц |
 
 ## Переменные окружения
 
@@ -160,6 +182,7 @@ py -3 -m venv .venv
 APP_NAME=MessengerAPI
 ENV=development
 DEBUG=True
+AUTO_CREATE_TABLES=True
 HOST=0.0.0.0
 PORT=8000
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
@@ -171,18 +194,6 @@ VITE_API_URL=http://127.0.0.1:8000
 ```
 
 Перед публичным deploy надо заменить `JWT_SECRET`, `DATABASE_URL` и другие значения окружения на реальные.
-
-## База данных
-
-PostgreSQL пока не запускается автоматически. В `start.ps1` и `start.sh` есть закомментированная заготовка для Docker и Docker Compose.
-
-Ожидаемая dev-строка подключения:
-
-```text
-postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
-```
-
-Пока БД не запущена, `/api/debug/check` должен работать, а `/api/db/check_connect` ожидаемо вернет ошибку подключения.
 
 ## Диаграммы
 
@@ -199,8 +210,6 @@ flowchart LR
 
 ### ERD
 
-Планируемая модель данных:
-
 ```mermaid
 erDiagram
     USERS {
@@ -213,12 +222,15 @@ erDiagram
 
     CHATS {
         int id PK
+        string title
         datetime created_at
     }
 
     CHAT_MEMBERS {
+        int id PK
         int chat_id FK
         int user_id FK
+        datetime joined_at
     }
 
     MESSAGES {
@@ -250,18 +262,26 @@ classDiagram
     }
 
     class Config {
-        +APP_NAME
         +DATABASE_URL
-        +JWT_SECRET
+        +AUTO_CREATE_TABLES
     }
 
     class DatabaseSession {
         +engine
+        +init_db()
+    }
+
+    class Models {
+        +User
+        +Chat
+        +ChatMember
+        +Message
     }
 
     ReactApp --> FastAPIApp : HTTP
     FastAPIApp --> Config
     FastAPIApp --> DatabaseSession
+    DatabaseSession --> Models
     DatabaseSession --> PostgreSQL
 ```
 
@@ -283,6 +303,6 @@ flowchart TD
 
 ## Текущее состояние
 
-Сейчас реализованы frontend-заготовка, FastAPI-приложение, debug API, проверка подключения к БД и скрипты запуска.
+Сейчас реализованы frontend-заготовка, FastAPI-приложение, debug API, PostgreSQL Docker Compose, SQLAlchemy-модели и автоматическое создание базовых таблиц.
 
 Регистрация, логин, реальные сообщения и WebSocket-чат пока не реализованы.

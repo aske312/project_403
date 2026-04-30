@@ -9,6 +9,8 @@ UPDATE_REPO=0
 SKIP_SYSTEM_DEPS=0
 SKIP_INSTALL=0
 SKIP_BUILD=0
+START_DB=0
+DB_ONLY=0
 INSTALL_ONLY=0
 BUILD_ONLY=0
 FORCE_INSTALL=0
@@ -42,6 +44,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-build)
             SKIP_BUILD=1
+            shift
+            ;;
+        --start-db)
+            START_DB=1
+            shift
+            ;;
+        --db-only)
+            DB_ONLY=1
             shift
             ;;
         --install-only)
@@ -89,6 +99,8 @@ Bootstrap options:
 Project options:
   --skip-install          Skip Python/npm dependency installation.
   --skip-build            Skip frontend dist freshness check.
+  --start-db              Start PostgreSQL using docker compose before app startup.
+  --db-only               Start PostgreSQL using docker compose and exit.
   --install-only          Prepare environment and exit.
   --build-only            Prepare/check frontend build and exit.
   --force-install         Reinstall npm dependencies.
@@ -174,6 +186,36 @@ install_system_deps() {
     fi
 }
 
+install_docker() {
+    if has_command docker; then
+        return
+    fi
+
+    if [[ "$SKIP_SYSTEM_DEPS" -eq 1 ]]; then
+        echo "Docker is not installed or is not available in PATH." >&2
+        exit 1
+    fi
+
+    if ! has_command apt-get; then
+        echo "Docker auto-install is supported only on apt-based Linux distributions." >&2
+        exit 1
+    fi
+
+    step "Installing Docker Engine"
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y ca-certificates curl
+    sudo_cmd install -m 0755 -d /etc/apt/keyrings
+    sudo_cmd curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo_cmd chmod a+r /etc/apt/keyrings/docker.asc
+
+    . /etc/os-release
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" |
+        sudo_cmd tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
 repo_dir_name() {
     local name
     name="$(basename "$REPO_URL")"
@@ -208,6 +250,7 @@ ensure_env_file() {
 APP_NAME=MessengerAPI
 ENV=development
 DEBUG=True
+AUTO_CREATE_TABLES=True
 
 # SERVER
 HOST=0.0.0.0
@@ -248,6 +291,18 @@ build_outdated() {
     return 1
 }
 
+start_database() {
+    if [[ ! -f "docker-compose.yml" ]]; then
+        echo "docker-compose.yml was not found." >&2
+        exit 1
+    fi
+
+    install_docker
+
+    step "Starting PostgreSQL"
+    docker compose up -d db
+}
+
 install_system_deps
 enter_or_clone_project
 
@@ -262,6 +317,15 @@ if [[ "$UPDATE_REPO" -eq 1 ]]; then
 fi
 
 ensure_env_file
+
+if [[ "$START_DB" -eq 1 || "$DB_ONLY" -eq 1 ]]; then
+    start_database
+fi
+
+if [[ "$DB_ONLY" -eq 1 ]]; then
+    step "Database is ready"
+    exit 0
+fi
 
 if [[ "$SKIP_INSTALL" -eq 0 ]]; then
     if [[ ! -x ".venv/bin/python" ]]; then
@@ -304,20 +368,6 @@ if [[ "$BUILD_ONLY" -eq 1 ]]; then
     step "Build is ready"
     exit 0
 fi
-
-# Database startup placeholder. Keep disabled until local DB orchestration is chosen.
-#
-# Docker example:
-# step "Starting PostgreSQL"
-# docker run --name messenger-postgres \
-#     -e POSTGRES_DB=messenger_db \
-#     -e POSTGRES_USER=postgres \
-#     -e POSTGRES_PASSWORD=password \
-#     -p 5432:5432 \
-#     -d postgres:16
-#
-# Docker Compose example:
-# docker compose up -d db
 
 cleanup() {
     step "Stopping processes"
