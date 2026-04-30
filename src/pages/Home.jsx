@@ -228,9 +228,9 @@ export default function Home() {
 
         <nav className="footer-links" aria-label="Footer">
           <a href="/debug">{t.footerApi}</a>
-          <a href="https://github.com">{t.github}</a>
-          <a href="https://vk.com">{t.vk}</a>
-          <a href="https://t.me">{t.telegram}</a>
+          <a href="https://github.com/aske312/project_403/blob/master/README.md">{t.github}</a>
+          <a href="https://vk.com/aske312">{t.vk}</a>
+          <a href="https://t.me/aske312">{t.telegram}</a>
         </nav>
       </footer>
     </div>
