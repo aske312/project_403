@@ -19,16 +19,13 @@ def get_build_id():
     if build_id and build_id.lower() != "dev":
         return build_id
 
-    branch = get_project_branch()
-
     try:
-        commit = subprocess.check_output(
+        return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
             stderr=subprocess.DEVNULL,
         ).decode().strip()
-        return f"{branch}@{commit}"
     except Exception:
-        return f"{branch}@local"
+        return "local"
 
 
 def get_project_branch():
@@ -49,6 +46,8 @@ class Parameters:
     # App
     APP_NAME = os.getenv("APP_NAME", "Project_403")
     VERSION = f"v {os.getenv('VERSION', '0.0.1')} build {get_build_id()}"
+    STARTUP_DURATION_MS = None
+    DATABASE_STARTUP_DURATION_MS = None
     PROJECT_BRANCH = get_project_branch()
     PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     ENV = os.getenv("ENV", "development")

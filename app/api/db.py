@@ -1,7 +1,10 @@
 from fastapi import APIRouter
 from sqlalchemy import text
+import time
+
 from app.db import session
 from app.db.models import Base
+from app.setting.config import parameters as param
 
 router = APIRouter()
 
@@ -22,6 +25,8 @@ async def get_database_version(conn):
 
 @router.get("/api/db/check_connect")
 async def check_connect():
+    started = time.perf_counter()
+
     try:
         async with session.engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
@@ -33,6 +38,8 @@ async def check_connect():
             "db_response": value,
             "backend": session.get_database_backend(),
             "version": version,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+            "startup_ms": param.DATABASE_STARTUP_DURATION_MS,
             "database_url": session.get_public_database_url(),
         }
     except Exception as e:
@@ -41,6 +48,8 @@ async def check_connect():
             "backend": session.get_database_backend(),
             "database_url": session.get_public_database_url(),
             "version": None,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+            "startup_ms": param.DATABASE_STARTUP_DURATION_MS,
             "error": str(e)
         }
 

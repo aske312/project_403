@@ -142,21 +142,33 @@ async def log_requests(request, call_next):
 
 @app.on_event("startup")
 async def startup():
-    logger.info(
-        "Starting %s %s env=%s branch=%s",
-        param.APP_NAME,
-        param.VERSION,
-        param.ENV,
-        param.PROJECT_BRANCH,
-    )
-
-    if not param.AUTO_CREATE_TABLES:
-        logger.info("Database auto-create is disabled")
-        return
+    startup_started = time.perf_counter()
 
     try:
-        await init_db()
-    except Exception as exc:
-        logger.exception("Database initialization skipped: %s", exc)
-    else:
-        logger.info("Database initialized: %s", get_public_database_url())
+        logger.info(
+            "Starting %s %s env=%s branch=%s",
+            param.APP_NAME,
+            param.VERSION,
+            param.ENV,
+            param.PROJECT_BRANCH,
+        )
+
+        if not param.AUTO_CREATE_TABLES:
+            logger.info("Database auto-create is disabled")
+            return
+
+        database_started = time.perf_counter()
+        try:
+            await init_db()
+        except Exception as exc:
+            logger.exception("Database initialization skipped: %s", exc)
+        else:
+            logger.info("Database initialized: %s", get_public_database_url())
+        finally:
+            param.DATABASE_STARTUP_DURATION_MS = round(
+                (time.perf_counter() - database_started) * 1000,
+                1,
+            )
+    finally:
+        param.STARTUP_DURATION_MS = round((time.perf_counter() - startup_started) * 1000, 1)
+        logger.info("Startup completed in %.1fms", param.STARTUP_DURATION_MS)

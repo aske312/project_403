@@ -7,6 +7,7 @@ import {
 
 import Home from "./pages/Home";
 import Admin from "./pages/Admin";
+import { markFrontendReady } from "./utils/performanceMetrics";
 
 const router = createBrowserRouter([
   {
@@ -24,3 +25,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <RouterProvider router={router} />
   </React.StrictMode>
 );
+
+requestAnimationFrame(markFrontendReady);

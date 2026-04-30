@@ -69,11 +69,13 @@
 
 .app-account-button {
   min-height: 38px;
-  max-width: 220px;
+  width: 38px;
+  max-width: 38px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
-  padding: 0 12px 0 7px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -95,13 +97,6 @@
   font-weight: 900;
 }
 
-.app-account-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .app-account-dropdown {
   position: absolute;
   z-index: 20;
@@ -118,6 +113,15 @@
 
 .app-account-name {
   font-weight: 900;
+}
+
+.app-account-tag {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .app-account-meta {
@@ -137,25 +141,23 @@
   line-height: 1.4;
 }
 
-.app-account-access-reason {
-  margin-top: 10px;
-  color: var(--text);
-  font-weight: 800;
-}
-
-.app-account-link {
-  min-height: 34px;
+.app-account-link,
+.app-account-logout {
+  width: 100%;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: 10px;
   padding: 0 12px;
-  border: 1px solid var(--primary);
   border-radius: 8px;
-  color: #ffffff;
-  background: #2563eb;
   font-size: 13px;
   font-weight: 900;
+}
+
+.app-account-link {
+  border: 1px solid var(--primary);
+  color: #ffffff;
+  background: #2563eb;
   text-decoration: none;
 }
 
@@ -164,20 +166,11 @@
 }
 
 .app-account-logout {
-  width: 100%;
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   margin-top: 12px;
-  padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
   color: var(--danger);
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
 }
 
 .app-account-logout:hover {
@@ -209,6 +202,14 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.app-footer-version {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .app-footer-links {
@@ -282,8 +283,10 @@
   }
 
   .app-account-button {
-    width: 100%;
-    max-width: none;
+    width: 38px;
+    max-width: 38px;
+    justify-content: center;
+    padding: 0;
   }
 
   .app-account-dropdown {

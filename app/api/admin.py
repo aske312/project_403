@@ -32,6 +32,7 @@ def health():
         "stack": stack["name"],
         "stack_version": stack["version"],
         "version": param.VERSION,
+        "startup_ms": param.STARTUP_DURATION_MS,
         "branch": param.PROJECT_BRANCH,
         "environment": param.ENV,
     }

@@ -32,6 +32,8 @@ export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
           <div className="service-table-head">
             <span>{t.serviceColumn}</span>
             <span>{t.stack}</span>
+            <span>{t.latency}</span>
+            <span>{t.startupTime}</span>
           </div>
 
           {serviceRows.map((service) => (
@@ -42,6 +44,8 @@ export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+              <span className="service-metric">{service.latency}</span>
+              <span className="service-metric">{service.startupTime}</span>
             </div>
           ))}
         </div>

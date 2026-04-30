@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { execSync } from 'node:child_process'
+import { performance } from 'node:perf_hooks'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 const lock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf-8'))
@@ -63,35 +64,74 @@ function getProjectBranch(env) {
   }
 }
 
+function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch }) {
+  const startedAt = performance.now()
+  let startupMs = null
+
+  return {
+    name: 'project-403-frontend-metrics',
+    configureServer(server) {
+      const markReady = () => {
+        startupMs = Math.round((performance.now() - startedAt) * 10) / 10
+      }
+
+      if (server.httpServer?.listening) {
+        markReady()
+      } else {
+        server.httpServer?.once('listening', markReady)
+      }
+
+      server.middlewares.use('/__project403/frontend-metrics', (request, response, next) => {
+        if (request.method !== 'GET') {
+          next()
+          return
+        }
+
+        response.setHeader('Content-Type', 'application/json; charset=utf-8')
+        response.end(
+          JSON.stringify({
+            status: 'ok',
+            app: appName,
+            stack: frontendStack,
+            version: appVersion,
+            branch: projectBranch,
+            startup_ms: startupMs,
+            mode: server.config.mode,
+          }),
+        )
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const projectBranch = getProjectBranch(env)
   const envBuildId = env.BUILD_ID && env.BUILD_ID.toLowerCase() !== 'dev' ? env.BUILD_ID : null
-  const buildId = envBuildId ?? `${projectBranch}@${getGitShortSha()}`
+  const buildId = envBuildId ?? getGitShortSha()
   const appVersion = `v ${env.VERSION ?? pkg.version} build ${buildId}`
+  const appName = env.APP_NAME ?? pkg.name
+  const frontendStack = [
+    formatDependency('JavaScript V8', process.versions.v8),
+    formatDependency('Node.js', process.versions.node),
+    formatDependency('react', getLockedDependencyVersion('react') ?? pkg.dependencies.react),
+    formatDependency('vite', getLockedDependencyVersion('vite') ?? pkg.devDependencies.vite),
+  ].join(', ')
+  const backendStack = [
+    getPythonVersion(),
+    formatDependency('FastAPI', getRequirementVersion('fastapi')),
+    formatDependency('SQLAlchemy', getRequirementVersion('SQLAlchemy')),
+  ].join(', ')
 
   return {
-    plugins: [react()],
+    plugins: [react(), frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch })],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
-      'import.meta.env.VITE_APP_NAME': JSON.stringify(env.APP_NAME ?? pkg.name),
+      'import.meta.env.VITE_APP_NAME': JSON.stringify(appName),
       'import.meta.env.VITE_PROJECT_BRANCH': JSON.stringify(projectBranch),
-      'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(
-        [
-          formatDependency('JavaScript V8', process.versions.v8),
-          formatDependency('Node.js', process.versions.node),
-          formatDependency('react', getLockedDependencyVersion('react') ?? pkg.dependencies.react),
-          formatDependency('vite', getLockedDependencyVersion('vite') ?? pkg.devDependencies.vite),
-        ].join(', '),
-      ),
-      'import.meta.env.VITE_BACKEND_STACK': JSON.stringify(
-        [
-          getPythonVersion(),
-          formatDependency('FastAPI', getRequirementVersion('fastapi')),
-          formatDependency('SQLAlchemy', getRequirementVersion('SQLAlchemy')),
-        ].join(', '),
-      ),
+      'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(frontendStack),
+      'import.meta.env.VITE_BACKEND_STACK': JSON.stringify(backendStack),
     },
   }
 })

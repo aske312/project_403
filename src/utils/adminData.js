@@ -32,6 +32,45 @@ function getDatabaseServiceState(database) {
   return database.backend === "postgresql" ? "ok" : "warning";
 }
 
+function formatDuration(value, fallback) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  if (value <= 0) {
+    return "0 ms";
+  }
+
+  if (value < 1) {
+    return "<1 ms";
+  }
+
+  if (value < 1000) {
+    return `${Math.round(value)} ms`;
+  }
+
+  if (value < 60000) {
+    const seconds = value / 1000;
+    return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s`;
+  }
+
+  if (value < 3600000) {
+    const minutes = value / 60000;
+    return `${minutes < 10 ? minutes.toFixed(1) : Math.round(minutes)} min`;
+  }
+
+  const hours = value / 3600000;
+  return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} h`;
+}
+
+function formatLatency(value, fallback) {
+  return formatDuration(value, fallback);
+}
+
+function formatStartupTime(value, fallback) {
+  return formatDuration(value, fallback);
+}
+
 export function buildEndpointsFromOpenApi(schema) {
   return Object.entries(schema?.paths || {})
     .flatMap(([path, operations]) =>
@@ -45,16 +84,19 @@ export function buildEndpointsFromOpenApi(schema) {
     .sort((a, b) => `${a.path}:${a.method}`.localeCompare(`${b.path}:${b.method}`));
 }
 
-export function buildServiceRows(t, backend, database) {
+export function buildServiceRows(t, frontend, backend, database) {
   const backendOk = backend?.status === "ok";
   const databaseState = getDatabaseServiceState(database);
+  const frontendState = frontend?.status === "error" ? "error" : "ok";
 
   return [
     {
       id: "frontend",
       name: t.frontend,
-      state: "ok",
+      state: frontendState,
       stack: splitStack(import.meta.env.VITE_FRONTEND_STACK),
+      latency: formatLatency(frontend?.latency_ms, frontend ? t.notMeasured : t.checking),
+      startupTime: formatStartupTime(frontend?.startup_ms, frontend ? t.notMeasured : t.checking),
     },
     {
       id: "backend",
@@ -66,12 +108,19 @@ export function buildServiceRows(t, backend, database) {
             formatStack(backend.stack, backend.stack_version),
           ].filter(Boolean)
         : [backend?.error || t.unavailable],
+      latency: formatLatency(backend?.latency_ms, t.checking),
+      startupTime: formatStartupTime(backend?.startup_ms, t.checking),
     },
     {
       id: "database",
       name: t.database,
       state: databaseState,
       stack: [database?.version || database?.backend || t.checking],
+      latency: formatLatency(database?.latency_ms, t.checking),
+      startupTime: formatStartupTime(
+        database?.startup_ms,
+        database ? t.notMeasured : t.checking,
+      ),
     },
   ];
 }

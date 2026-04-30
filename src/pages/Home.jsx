@@ -126,7 +126,6 @@ export default function Home() {
         onLogout={handleLogout}
         adminLinkVisible={showAdminLink}
         adminLinkLabel={t.adminPanel}
-        adminAccessReason={t.adminAccessReason}
       />
 
       <main className="auth-shell">
@@ -144,6 +143,7 @@ export default function Home() {
         variant="auth"
         statusLabel={env.label}
         statusState={env.state}
+        version={import.meta.env.VITE_APP_VERSION}
         links={[
           { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
           { href: "https://vk.com/aske312", label: t.vk },

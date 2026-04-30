@@ -1,10 +1,24 @@
 export const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-async function requestJson(path, options) {
-  const response = await fetch(`${API_URL}${path}`, options);
+async function requestJsonFromUrl(url, options) {
+  const startedAt = performance.now();
+  const response = await fetch(url, options);
   const payload = await response.json();
+  const durationMs = performance.now() - startedAt;
 
-  return { response, payload };
+  return { response, payload, durationMs };
+}
+
+async function requestJson(path, options) {
+  return requestJsonFromUrl(`${API_URL}${path}`, options);
+}
+
+async function requestLocalJson(path, options) {
+  return requestJsonFromUrl(path, options);
+}
+
+export function getFrontendMetrics() {
+  return requestLocalJson("/__project403/frontend-metrics");
 }
 
 export function getHealth() {

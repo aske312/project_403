@@ -10,14 +10,6 @@ function getInitials(name) {
     .toUpperCase();
 }
 
-function getRoleLabel(t, role) {
-  return t.roles?.[role] || role;
-}
-
-function getPermissionLabel(t, permission) {
-  return t.permissions?.[permission] || permission;
-}
-
 export default function AppHeader({
   variant = "auth",
   projectName,
@@ -34,7 +26,6 @@ export default function AppHeader({
   adminLinkVisible = false,
   adminLinkHref = "/admin",
   adminLinkLabel,
-  adminAccessReason,
 }) {
   const brandContent = (
     <>
@@ -80,37 +71,17 @@ export default function AppHeader({
               <span className="app-account-avatar" aria-hidden="true">
                 {profile.name?.[0]?.toUpperCase() || "U"}
               </span>
-              <span className="app-account-label">
-                {profile.tag || profile.handle || profile.name}
-              </span>
             </button>
 
             {accountOpen && (
               <div className="app-account-dropdown" role="menu">
                 <div className="app-account-name">{profile.name}</div>
-                <div className="app-account-meta">{profile.email}</div>
-                <div className="app-account-meta">
-                  {t.userTag}: {profile.tag || `@${profile.handle}`}
-                </div>
-                <div className="app-account-meta">
-                  {t.userRole}: {getRoleLabel(t, profile.role || "user")}
-                </div>
-                {profile.permissions?.length > 0 && (
-                  <div className="app-account-meta">
-                    {t.userPermissions}:{" "}
-                    {profile.permissions
-                      .map((permission) => getPermissionLabel(t, permission))
-                      .join(", ")}
-                  </div>
-                )}
+                <div className="app-account-tag">{profile.tag || `@${profile.handle}`}</div>
                 <div className="app-account-description">
                   {adminLinkVisible ? (
-                    <>
-                      <div className="app-account-access-reason">{adminAccessReason}</div>
-                      <a className="app-account-link" href={adminLinkHref} role="menuitem">
-                        {adminLinkLabel}
-                      </a>
-                    </>
+                    <a className="app-account-link" href={adminLinkHref} role="menuitem">
+                      {adminLinkLabel}
+                    </a>
                   ) : (
                     <div>{t.accountStub}</div>
                   )}

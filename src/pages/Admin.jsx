@@ -9,6 +9,7 @@ import AppHeader from "../components/AppHeader";
 import {
   API_URL,
   checkDatabase,
+  getFrontendMetrics,
   getHealth,
   getLogs,
   getOpenApi,
@@ -20,6 +21,7 @@ import {
   fallbackEndpoints,
 } from "../utils/adminData";
 import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
+import { getFrontendPerformanceMetrics } from "../utils/performanceMetrics";
 import { useAuthSession } from "../utils/useAuthSession";
 import "../styles/admin.css";
 
@@ -27,6 +29,7 @@ export default function Admin() {
   const [theme, setTheme] = useState("dark");
   const [lang, setLang] = useState("RU");
   const [endpoints, setEndpoints] = useState(fallbackEndpoints);
+  const [frontend, setFrontend] = useState(null);
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -46,11 +49,36 @@ export default function Admin() {
 
   useEffect(() => {
     let ignore = false;
+    const frameId = requestAnimationFrame(async () => {
+      const browserMetrics = getFrontendPerformanceMetrics();
+
+      try {
+        const { payload, durationMs } = await getFrontendMetrics();
+        if (!ignore) {
+          setFrontend({
+            ...payload,
+            latency_ms: durationMs,
+            startup_ms: payload.startup_ms ?? browserMetrics.startup_ms,
+          });
+        }
+      } catch {
+        if (!ignore) setFrontend(browserMetrics);
+      }
+    });
+
+    return () => {
+      ignore = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
 
     async function loadBackend() {
       try {
-        const { payload } = await getHealth();
-        if (!ignore) setBackend(payload);
+        const { payload, durationMs } = await getHealth();
+        if (!ignore) setBackend({ ...payload, latency_ms: durationMs });
       } catch (error) {
         if (!ignore) setBackend({ status: "error", error: error.message });
       }
@@ -83,8 +111,14 @@ export default function Admin() {
 
     async function loadDatabase() {
       try {
-        const { payload } = await checkDatabase();
-        if (!ignore) setDatabase(payload);
+        const { payload, durationMs } = await checkDatabase();
+        if (!ignore) {
+          setDatabase({
+            ...payload,
+            request_latency_ms: durationMs,
+            latency_ms: payload.latency_ms ?? durationMs,
+          });
+        }
       } catch (error) {
         if (!ignore) setDatabase({ status: "error", error: error.message });
       }
@@ -109,8 +143,8 @@ export default function Admin() {
   }, [accessReady, adminAccessAllowed]);
 
   const serviceRows = useMemo(
-    () => buildServiceRows(t, backend, database),
-    [backend, database, t],
+    () => buildServiceRows(t, frontend, backend, database),
+    [backend, database, frontend, t],
   );
 
   if (accessReady && !adminAccessAllowed) {
@@ -134,7 +168,6 @@ export default function Admin() {
         onLogout={logout}
         adminLinkVisible={adminAccessAllowed}
         adminLinkLabel={t.adminPanel}
-        adminAccessReason={t.adminAccessReason}
       />
 
       {!accessReady ? (
@@ -156,6 +189,7 @@ export default function Admin() {
         variant="admin"
         statusLabel={env.label}
         statusState={env.state}
+        version={backend?.version || import.meta.env.VITE_APP_VERSION}
         links={[
           { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
           { href: "https://vk.com/aske312", label: t.vk },
