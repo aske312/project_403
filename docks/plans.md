@@ -36,17 +36,17 @@
 Реализовать безопасный доступ пользователей
 
 ### Backend:
-* [ ] Модель User
-* [ ] Хеширование пароля (bcrypt)
-* [ ] Endpoint регистрации `/auth/register`
-* [ ] Endpoint логина `/auth/login`
+* [x] Модель User
+* [x] Хеширование пароля (bcrypt)
+* [x] Endpoint регистрации `/auth/register`
+* [x] Endpoint логина `/auth/login`
 * [ ] Генерация JWT
 * [ ] Middleware проверки токена
 
 ### Frontend:
-* [ ] Форма регистрации
-* [ ] Форма логина
-* [ ] Хранение JWT (localStorage / memory)
+* [x] Форма регистрации
+* [x] Форма логина
+* [x] Хранение JWT (localStorage / memory)
 * [ ] Обработка ошибок
 
 ---
