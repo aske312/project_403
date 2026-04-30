@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import AppFooter from "../components/AppFooter";
+import AppHeader from "../components/AppHeader";
+import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
 import "../styles/home.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -40,13 +43,23 @@ const copy = {
     themeLight: "\u0421\u0432\u0435\u0442\u043b\u0430\u044f \u0442\u0435\u043c\u0430",
     themeDark: "\u0422\u0435\u043c\u043d\u0430\u044f \u0442\u0435\u043c\u0430",
     accountMenu: "\u0410\u043a\u043a\u0430\u0443\u043d\u0442",
-    accountStub: "\u041c\u0435\u043d\u044e \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430 \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u043f\u043e\u0437\u0436\u0435.",
+    accountStub: "\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u0440\u0430\u0437\u0434\u0435\u043b\u044b \u0437\u0430\u0432\u0438\u0441\u044f\u0442 \u043e\u0442 \u0440\u043e\u043b\u0438, \u043f\u0440\u0430\u0432 \u0438 \u0441\u0440\u0435\u0434\u044b.",
+    logout: "\u0412\u044b\u0439\u0442\u0438",
+    adminPanel: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
+    adminAccessReason: "\u0414\u043e\u0441\u0442\u0443\u043f \u043e\u0442\u043a\u0440\u044b\u0442: super admin + \u0440\u043e\u043b\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u0435\u0446 + DEV.",
+    userRole: "\u0420\u043e\u043b\u044c",
+    userPermissions: "\u041f\u0440\u0430\u0432\u0430",
     userTag: "\u0422\u0435\u0433",
-    footerStatus: "\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0432 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
-    footerApi: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
+    roles: {
+      owner: "\u0412\u043b\u0430\u0434\u0435\u043b\u0435\u0446",
+      user: "\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c",
+    },
+    permissions: {
+      super_admin: "Super admin",
+    },
     bullets: [
       "\u0411\u044b\u0441\u0442\u0440\u044b\u0439 \u0432\u0445\u043e\u0434 \u0432 \u043b\u0438\u0447\u043d\u044b\u0435 \u0447\u0430\u0442\u044b",
       "\u041c\u0438\u043d\u0438\u043c\u0443\u043c \u043b\u0438\u0448\u043d\u0438\u0445 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439",
@@ -89,13 +102,23 @@ const copy = {
     themeLight: "Light theme",
     themeDark: "Dark theme",
     accountMenu: "Account",
-    accountStub: "Account menu will be added later.",
+    accountStub: "Available sections depend on role, permissions and environment.",
+    logout: "Log out",
+    adminPanel: "Admin panel",
+    adminAccessReason: "Access is open: super admin + owner role + DEV.",
+    userRole: "Role",
+    userPermissions: "Permissions",
     userTag: "Tag",
-    footerStatus: "Application in development",
-    footerApi: "Admin panel",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
+    roles: {
+      owner: "Owner",
+      user: "User",
+    },
+    permissions: {
+      super_admin: "Super admin",
+    },
     bullets: [
       "Fast access to private chats",
       "No unnecessary steps",
@@ -114,16 +137,21 @@ export default function Home() {
   const [mode, setMode] = useState("login");
   const [status, setStatus] = useState("");
   const [projectName, setProjectName] = useState(import.meta.env.VITE_APP_NAME || "Project_403");
+  const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.MODE);
   const [profile, setProfile] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
 
   const t = copy[lang];
   const isRegister = mode === "register";
+  const env = normalizeEnvironment(projectEnvironment);
+  const showAdminLink = canUseAdminPanel(profile, env);
 
-  const initials = useMemo(
-    () => projectName.split("_").map((part) => part[0]).join(""),
-    [projectName],
-  );
+  const handleLogout = () => {
+    window.localStorage.removeItem("access_token");
+    setProfile(null);
+    setAccountOpen(false);
+    setStatus("");
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -134,10 +162,12 @@ export default function Home() {
         const payload = await response.json();
         if (!ignore && payload.app) {
           setProjectName(payload.app);
+          setProjectEnvironment(payload.environment || import.meta.env.MODE);
         }
       } catch {
         if (!ignore) {
           setProjectName(import.meta.env.VITE_APP_NAME || "Project_403");
+          setProjectEnvironment(import.meta.env.MODE);
         }
       }
     }
@@ -242,61 +272,22 @@ export default function Home() {
 
   return (
     <div className={`auth-page ${theme}`}>
-      <header className="auth-header">
-        <div className="brand">
-          <span className="brand-mark">{initials}</span>
-          <span>{projectName}</span>
-        </div>
-
-        <div className="header-actions">
-          <button
-            className="flag-switch"
-            type="button"
-            onClick={() => setLang(lang === "RU" ? "EN" : "RU")}
-            aria-label={t.language}
-            title={t.language}
-          >
-            <img src={lang === "RU" ? "/uk.png" : "/ru.png"} alt="" />
-            <span>{t.language}</span>
-          </button>
-
-          <button
-            className="text-btn"
-            type="button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          >
-            {theme === "light" ? t.themeDark : t.themeLight}
-          </button>
-
-          {profile && (
-            <div className="account-menu">
-              <button
-                className="account-button"
-                type="button"
-                onClick={() => setAccountOpen((value) => !value)}
-                aria-expanded={accountOpen}
-                aria-haspopup="menu"
-              >
-                <span className="account-avatar" aria-hidden="true">
-                  {profile.name?.[0]?.toUpperCase() || "U"}
-                </span>
-                <span className="account-label">{profile.tag || profile.handle || profile.name}</span>
-              </button>
-
-              {accountOpen && (
-                <div className="account-dropdown" role="menu">
-                  <div className="account-name">{profile.name}</div>
-                  <div className="account-meta">{profile.email}</div>
-                  <div className="account-meta">
-                    {t.userTag}: {profile.tag || `@${profile.handle}`}
-                  </div>
-                  <div className="account-stub">{t.accountStub}</div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </header>
+      <AppHeader
+        variant="auth"
+        projectName={projectName}
+        theme={theme}
+        lang={lang}
+        t={t}
+        profile={profile}
+        accountOpen={accountOpen}
+        onToggleAccount={() => setAccountOpen((value) => !value)}
+        onToggleLang={() => setLang(lang === "RU" ? "EN" : "RU")}
+        onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+        onLogout={handleLogout}
+        adminLinkVisible={showAdminLink}
+        adminLinkLabel={t.adminPanel}
+        adminAccessReason={t.adminAccessReason}
+      />
 
       <main className="auth-shell">
         <section className="intro-panel" aria-label={t.product}>
@@ -460,19 +451,16 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="auth-footer">
-        <div className="footer-status">
-          <span className="status-dot" aria-hidden="true" />
-          <span>{t.footerStatus}</span>
-        </div>
-
-        <nav className="footer-links" aria-label="Footer">
-          <a href="/admin">{t.footerApi}</a>
-          <a href="https://github.com/aske312/project_403/blob/master/README.md">{t.github}</a>
-          <a href="https://vk.com/aske312">{t.vk}</a>
-          <a href="https://t.me/aske312">{t.telegram}</a>
-        </nav>
-      </footer>
+      <AppFooter
+        variant="auth"
+        statusLabel={env.label}
+        statusState={env.state}
+        links={[
+          { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
+          { href: "https://vk.com/aske312", label: t.vk },
+          { href: "https://t.me/aske312", label: t.telegram },
+        ]}
+      />
     </div>
   );
 }

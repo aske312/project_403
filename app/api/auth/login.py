@@ -47,6 +47,9 @@ class UserResponse(BaseModel):
     first_name: str | None
     last_name: str | None
     name: str
+    role: str
+    is_super_admin: bool
+    permissions: list[str]
 
 
 class TokenResponse(BaseModel):
@@ -60,6 +63,8 @@ def verify_password(password, password_hash):
 
 
 def make_user_response(user):
+    permissions = ["super_admin"] if user.is_super_admin else []
+
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -68,6 +73,9 @@ def make_user_response(user):
         first_name=user.first_name,
         last_name=user.last_name,
         name=user.name,
+        role=user.role or "user",
+        is_super_admin=bool(user.is_super_admin),
+        permissions=permissions,
     )
 
 

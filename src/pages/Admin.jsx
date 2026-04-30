@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/admin.css";
+import AppFooter from "../components/AppFooter";
+import AppHeader from "../components/AppHeader";
 import Endpoint from "../components/Endpoint";
+import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
@@ -19,17 +22,6 @@ const fallbackEndpoints = [
   { method: "GET", path: "/api/db/check_connect" },
   { method: "POST", path: "/api/db/init" },
 ];
-
-const envStates = {
-  active: "active",
-  deactive: "deactive",
-  inactive: "deactive",
-  debug: "debug",
-  dev: "dev",
-  development: "dev",
-  close: "close",
-  closed: "close",
-};
 
 const copy = {
   EN: {
@@ -55,11 +47,27 @@ const copy = {
     noLogs: "No logs yet",
     download: "Download",
     accountMenu: "Account",
-    accountStub: "Account menu will be added later.",
+    accountStub: "Available sections depend on role, permissions and environment.",
+    logout: "Log out",
+    adminPanel: "Admin panel",
+    adminAccessReason: "Access is open: super admin + owner role + DEV.",
+    userRole: "Role",
+    userPermissions: "Permissions",
     userTag: "Tag",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
+    roles: {
+      owner: "Owner",
+      user: "User",
+    },
+    permissions: {
+      super_admin: "Super admin",
+    },
+    accessCheckingTitle: "Checking access",
+    accessCheckingText: "Admin panel opens only after profile and environment are verified.",
+    accessDeniedTitle: "Admin panel is hidden",
+    accessDeniedText: "Access requires DEV environment, owner role and super admin permission.",
   },
   RU: {
     home: "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e",
@@ -84,23 +92,29 @@ const copy = {
     noLogs: "\u041b\u043e\u0433\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
     download: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c",
     accountMenu: "\u0410\u043a\u043a\u0430\u0443\u043d\u0442",
-    accountStub: "\u041c\u0435\u043d\u044e \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430 \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u043f\u043e\u0437\u0436\u0435.",
+    accountStub: "\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u0440\u0430\u0437\u0434\u0435\u043b\u044b \u0437\u0430\u0432\u0438\u0441\u044f\u0442 \u043e\u0442 \u0440\u043e\u043b\u0438, \u043f\u0440\u0430\u0432 \u0438 \u0441\u0440\u0435\u0434\u044b.",
+    logout: "\u0412\u044b\u0439\u0442\u0438",
+    adminPanel: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
+    adminAccessReason: "\u0414\u043e\u0441\u0442\u0443\u043f \u043e\u0442\u043a\u0440\u044b\u0442: super admin + \u0440\u043e\u043b\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u0435\u0446 + DEV.",
+    userRole: "\u0420\u043e\u043b\u044c",
+    userPermissions: "\u041f\u0440\u0430\u0432\u0430",
     userTag: "\u0422\u0435\u0433",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
+    roles: {
+      owner: "\u0412\u043b\u0430\u0434\u0435\u0446",
+      user: "\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c",
+    },
+    permissions: {
+      super_admin: "Super admin",
+    },
+    accessCheckingTitle: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0434\u043e\u0441\u0442\u0443\u043f\u0430",
+    accessCheckingText: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e\u0441\u043b\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043f\u0440\u043e\u0444\u0438\u043b\u044f \u0438 \u0441\u0440\u0435\u0434\u044b.",
+    accessDeniedTitle: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c \u0441\u043a\u0440\u044b\u0442\u0430",
+    accessDeniedText: "\u0414\u043b\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043d\u0443\u0436\u043d\u044b DEV-\u0441\u0440\u0435\u0434\u0430, \u0440\u043e\u043b\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u0435\u0446 \u0438 \u043f\u0440\u0430\u0432\u043e super admin.",
   },
 };
-
-function getInitials(name) {
-  return String(name || "P")
-    .split(/[_\s-]+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
-}
 
 function formatStack(name, version) {
   return [name, version].filter(Boolean).join(" ");
@@ -111,15 +125,6 @@ function splitStack(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function normalizeEnvironment(value) {
-  const raw = String(value || "dev").trim();
-  const key = raw.toLowerCase();
-  return {
-    label: raw.toUpperCase(),
-    state: envStates[key] || "dev",
-  };
 }
 
 function buildEndpointsFromOpenApi(schema) {
@@ -168,13 +173,79 @@ export default function Admin() {
   const [database, setDatabase] = useState(null);
   const [logs, setLogs] = useState([]);
   const [profile, setProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
   const t = copy[lang];
   const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
   const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
+  const adminAccessAllowed = canUseAdminPanel(profile, env);
+  const accessReady = Boolean(backend) && profileLoaded;
+
+  const handleLogout = () => {
+    window.localStorage.removeItem("access_token");
+    setProfile(null);
+    setAccountOpen(false);
+    setProfileLoaded(true);
+  };
 
   useEffect(() => {
+    let ignore = false;
+
+    async function loadBackend() {
+      try {
+        const response = await fetch(`${API_URL}/api/admin/health`);
+        const payload = await response.json();
+        if (!ignore) setBackend(payload);
+      } catch (error) {
+        if (!ignore) setBackend({ status: "error", error: error.message });
+      }
+    }
+
+    async function loadProfile() {
+      const token = window.localStorage.getItem("access_token");
+      if (!token) {
+        if (!ignore) setProfileLoaded(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/users/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          window.localStorage.removeItem("access_token");
+          if (!ignore) {
+            setProfile(null);
+            setAccountOpen(false);
+            setProfileLoaded(true);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!ignore) setProfile(payload);
+      } catch {
+        if (!ignore) setProfile(null);
+      } finally {
+        if (!ignore) setProfileLoaded(true);
+      }
+    }
+
+    loadBackend();
+    loadProfile();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!accessReady || !adminAccessAllowed) return undefined;
+
     let ignore = false;
 
     async function loadOpenApi() {
@@ -190,16 +261,6 @@ export default function Admin() {
         }
       } catch {
         if (!ignore) setEndpoints(fallbackEndpoints);
-      }
-    }
-
-    async function loadBackend() {
-      try {
-        const response = await fetch(`${API_URL}/api/admin/health`);
-        const payload = await response.json();
-        if (!ignore) setBackend(payload);
-      } catch (error) {
-        if (!ignore) setBackend({ status: "error", error: error.message });
       }
     }
 
@@ -223,43 +284,14 @@ export default function Admin() {
       }
     }
 
-    async function loadProfile() {
-      const token = window.localStorage.getItem("access_token");
-      if (!token) return;
-
-      try {
-        const response = await fetch(`${API_URL}/api/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          window.localStorage.removeItem("access_token");
-          if (!ignore) {
-            setProfile(null);
-            setAccountOpen(false);
-          }
-          return;
-        }
-
-        const payload = await response.json();
-        if (!ignore) setProfile(payload);
-      } catch {
-        if (!ignore) setProfile(null);
-      }
-    }
-
     loadOpenApi();
-    loadBackend();
     loadDatabase();
     loadLogs();
-    loadProfile();
 
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [accessReady, adminAccessAllowed]);
 
   const serviceRows = useMemo(() => {
     const backendOk = backend?.status === "ok";
@@ -294,66 +326,46 @@ export default function Admin() {
 
   return (
     <div className={`admin-page ${theme}`}>
-      <header className="admin-topbar">
-        <a className="admin-brand" href="/">
-          <span className="admin-brand-mark">{getInitials(projectName)}</span>
-          <span>{projectName}</span>
-        </a>
+      <AppHeader
+        variant="admin"
+        projectName={projectName}
+        projectHref="/"
+        theme={theme}
+        lang={lang}
+        t={t}
+        profile={profile}
+        accountOpen={accountOpen}
+        onToggleAccount={() => setAccountOpen((value) => !value)}
+        onToggleLang={() => setLang(lang === "RU" ? "EN" : "RU")}
+        onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+        onLogout={handleLogout}
+        adminLinkVisible={adminAccessAllowed}
+        adminLinkLabel={t.adminPanel}
+        adminAccessReason={t.adminAccessReason}
+      />
 
-        <div className="admin-actions">
-          <button
-            className="admin-flag-switch"
-            type="button"
-            onClick={() => setLang(lang === "RU" ? "EN" : "RU")}
-            aria-label={t.language}
-            title={t.language}
-          >
-            <img src={lang === "RU" ? "/uk.png" : "/ru.png"} alt="" />
-            <span>{t.language}</span>
-          </button>
-
-          <button
-            className="admin-control"
-            type="button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          >
-            {theme === "light" ? t.themeDark : t.themeLight}
-          </button>
-
-          {profile && (
-            <div className="admin-account-menu">
-              <button
-                className="admin-account-button"
-                type="button"
-                onClick={() => setAccountOpen((value) => !value)}
-                aria-expanded={accountOpen}
-                aria-haspopup="menu"
-                title={t.accountMenu}
-              >
-                <span className="admin-account-avatar" aria-hidden="true">
-                  {profile.name?.[0]?.toUpperCase() || "U"}
-                </span>
-                <span className="admin-account-label">
-                  {profile.tag || profile.handle || profile.name}
-                </span>
-              </button>
-
-              {accountOpen && (
-                <div className="admin-account-dropdown" role="menu">
-                  <div className="admin-account-name">{profile.name}</div>
-                  <div className="admin-account-meta">{profile.email}</div>
-                  <div className="admin-account-meta">
-                    {t.userTag}: {profile.tag || `@${profile.handle}`}
-                  </div>
-                  <div className="admin-account-stub">{t.accountStub}</div>
-                </div>
-              )}
+      {!accessReady || !adminAccessAllowed ? (
+        <main className="admin-layout">
+          <section className="access-panel">
+            <div>
+              <p className="admin-eyebrow">{t.pageName}</p>
+              <h1>{accessReady ? t.accessDeniedTitle : t.accessCheckingTitle}</h1>
+              <p>{accessReady ? t.accessDeniedText : t.accessCheckingText}</p>
             </div>
-          )}
 
-        </div>
-      </header>
-
+            <div className="status-panel">
+              <div className="status-panel-head">
+                <span>{t.projectState}</span>
+                <StatusPill state={env.state} label={env.label} />
+              </div>
+              <div className="status-version">
+                <span>{t.buildVersion}</span>
+                <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
+              </div>
+            </div>
+          </section>
+        </main>
+      ) : (
       <main className="admin-layout">
         <section className="service-hero">
           <div>
@@ -442,20 +454,18 @@ export default function Admin() {
           </div>
         </section>
       </main>
+      )}
 
-      <footer className="admin-footer">
-        <div className="footer-status">
-          <span className={`status-dot ${env.state}`} aria-hidden="true" />
-          <span>{env.label}</span>
-        </div>
-
-        <nav className="footer-links" aria-label="Footer">
-          <a href="/">{t.home}</a>
-          <a href="https://github.com/aske312/project_403/blob/master/README.md">{t.github}</a>
-          <a href="https://vk.com/aske312">{t.vk}</a>
-          <a href="https://t.me/aske312">{t.telegram}</a>
-        </nav>
-      </footer>
+      <AppFooter
+        variant="admin"
+        statusLabel={env.label}
+        statusState={env.state}
+        links={[
+          { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
+          { href: "https://vk.com/aske312", label: t.vk },
+          { href: "https://t.me/aske312", label: t.telegram },
+        ]}
+      />
     </div>
   );
 }

@@ -11,6 +11,8 @@ param(
     [switch]$BuildOnly,
     [switch]$ForceInstall,
     [switch]$ForceBuild,
+    [switch]$StopOnly,
+    [switch]$NoReplaceExisting,
     [string]$BackendHost = "127.0.0.1",
     [int]$BackendPort = 8000,
     [string]$FrontendHost = "127.0.0.1",
@@ -28,6 +30,252 @@ function Write-Step {
 function Test-Command {
     param([string]$Name)
     $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Get-ChildProcessIds {
+    param([int]$ProcessId)
+
+    if ($IsWin) {
+        @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction SilentlyContinue |
+            ForEach-Object { [int]$_.ProcessId })
+        return
+    }
+
+    if (Test-Command "pgrep") {
+        @(& pgrep -P $ProcessId 2>$null | ForEach-Object {
+            if ($_ -match "^\d+$") {
+                [int]$_
+            }
+        })
+        return
+    }
+
+    @()
+}
+
+function Get-ProcessCommandLine {
+    param([int]$ProcessId)
+
+    if ($IsWin) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
+        if ($null -ne $process) {
+            return [string]$process.CommandLine
+        }
+
+        return ""
+    }
+
+    $cmdlinePath = "/proc/$ProcessId/cmdline"
+    if (Test-Path $cmdlinePath) {
+        return (Get-Content -LiteralPath $cmdlinePath -Raw -ErrorAction SilentlyContinue) -replace "`0", " "
+    }
+
+    return ""
+}
+
+function Stop-ProcessTree {
+    param([int]$ProcessId)
+
+    if ($ProcessId -le 0 -or $ProcessId -eq $PID) {
+        return
+    }
+
+    foreach ($childId in Get-ChildProcessIds $ProcessId) {
+        Stop-ProcessTree -ProcessId $childId
+    }
+
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        return
+    }
+
+    try {
+        Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+    } catch {
+        Write-Warning "Could not stop process ${ProcessId}: $($_.Exception.Message)"
+    }
+}
+
+function Add-ProcessTreeToSet {
+    param(
+        [int]$ProcessId,
+        [hashtable]$Target
+    )
+
+    if ($ProcessId -le 0 -or $ProcessId -eq $PID) {
+        return
+    }
+
+    if (-not $Target.ContainsKey($ProcessId)) {
+        $Target[$ProcessId] = $true
+    }
+
+    foreach ($childId in Get-ChildProcessIds $ProcessId) {
+        Add-ProcessTreeToSet -ProcessId $childId -Target $Target
+    }
+}
+
+function Test-ProjectCommandLine {
+    param([string]$CommandLine)
+
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) {
+        return $false
+    }
+
+    $line = $CommandLine.ToLowerInvariant()
+    $rootNative = $Root.ToLowerInvariant()
+    $rootSlash = ($Root -replace "\\", "/").ToLowerInvariant()
+    $hasRoot = $line.Contains($rootNative) -or $line.Contains($rootSlash)
+
+    if ($hasRoot -and ($line -match "uvicorn|app\.start:app|vite|node_modules")) {
+        return $true
+    }
+
+    if (($line -match "uvicorn") -and ($line -match "app\.start:app") -and ($line -match "--port\s+$BackendPort\b")) {
+        return $true
+    }
+
+    if (($line -match "vite") -and ($line -match "--port\s+$FrontendPort\b")) {
+        return $true
+    }
+
+    return $false
+}
+
+function Test-ProjectProcessName {
+    param([string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        return $false
+    }
+
+    $normalized = $Name.ToLowerInvariant()
+    return $normalized -match "^(node|node\.exe|python|python3|python\.exe|cmd|cmd\.exe|npm|npm\.cmd|sh|bash)$"
+}
+
+function Get-ProjectProcessRecords {
+    $records = @()
+
+    if ($IsWin) {
+        $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue
+        foreach ($process in $processes) {
+            if ($process.ProcessId -eq $PID) {
+                continue
+            }
+
+            if ((Test-ProjectProcessName $process.Name) -and (Test-ProjectCommandLine $process.CommandLine)) {
+                $records += [pscustomobject]@{
+                    ProcessId = [int]$process.ProcessId
+                    Name = [string]$process.Name
+                    CommandLine = [string]$process.CommandLine
+                }
+            }
+        }
+
+        return $records
+    }
+
+    foreach ($process in Get-Process -ErrorAction SilentlyContinue) {
+        if ($process.Id -eq $PID) {
+            continue
+        }
+
+        $commandLine = Get-ProcessCommandLine $process.Id
+        if ((Test-ProjectProcessName $process.ProcessName) -and (Test-ProjectCommandLine $commandLine)) {
+            $records += [pscustomobject]@{
+                ProcessId = [int]$process.Id
+                Name = [string]$process.ProcessName
+                CommandLine = [string]$commandLine
+            }
+        }
+    }
+
+    return $records
+}
+
+function Get-ListeningProcessIds {
+    param([int]$Port)
+
+    if ($IsWin -and (Test-Command "Get-NetTCPConnection")) {
+        @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            ForEach-Object { [int]$_ })
+        return
+    }
+
+    @()
+}
+
+function Add-ListeningProjectProcessesToSet {
+    param([hashtable]$Target)
+
+    foreach ($port in @($BackendPort, $FrontendPort)) {
+        foreach ($processId in Get-ListeningProcessIds $port) {
+            if ($processId -eq $PID) {
+                continue
+            }
+
+            $commandLine = Get-ProcessCommandLine $processId
+            if (Test-ProjectCommandLine $commandLine) {
+                Add-ProcessTreeToSet -ProcessId $processId -Target $Target
+            }
+        }
+    }
+}
+
+function Stop-TrackedProcessTrees {
+    param([hashtable]$ProcessIds)
+
+    foreach ($processId in ($ProcessIds.Keys | Sort-Object -Descending)) {
+        Stop-ProcessTree -ProcessId ([int]$processId)
+    }
+}
+
+function Stop-ExistingProjectProcesses {
+    param([string]$Message = "Stopping existing project processes")
+
+    $targets = @{}
+
+    foreach ($record in Get-ProjectProcessRecords) {
+        if (-not $targets.ContainsKey($record.ProcessId)) {
+            $targets[$record.ProcessId] = $record
+        }
+    }
+
+    foreach ($port in @($BackendPort, $FrontendPort)) {
+        foreach ($processId in Get-ListeningProcessIds $port) {
+            if ($processId -eq $PID -or $targets.ContainsKey($processId)) {
+                continue
+            }
+
+            $commandLine = Get-ProcessCommandLine $processId
+            if (Test-ProjectCommandLine $commandLine) {
+                $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                $targets[$processId] = [pscustomobject]@{
+                    ProcessId = [int]$processId
+                    Name = if ($null -ne $process) { [string]$process.ProcessName } else { "unknown" }
+                    CommandLine = [string]$commandLine
+                }
+                continue
+            }
+
+            $owner = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            $ownerName = if ($null -ne $owner) { $owner.ProcessName } else { "unknown" }
+            throw "Port $port is already in use by PID $processId ($ownerName). It does not look like this project's dev process, so it was not stopped."
+        }
+    }
+
+    if ($targets.Count -eq 0) {
+        return
+    }
+
+    Write-Step $Message
+    foreach ($record in ($targets.Values | Sort-Object ProcessId -Descending)) {
+        Write-Host "Stopping PID $($record.ProcessId) ($($record.Name))"
+        Stop-ProcessTree -ProcessId $record.ProcessId
+    }
+
+    Start-Sleep -Milliseconds 500
 }
 
 function Install-WingetPackage {
@@ -224,6 +472,21 @@ JWT_SECRET=change_me_before_public_deploy
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
+# DEV ACCOUNTS
+DEV_SUPERUSER_ENABLED=True
+DEV_SUPERUSER_EMAIL=supervisor@project403.local
+DEV_SUPERUSER_HANDLE=supervisor
+DEV_SUPERUSER_FIRST_NAME=Supervisor
+DEV_SUPERUSER_LAST_NAME=
+DEV_SUPERUSER_PASSWORD=Supervisor403
+
+DEV_USER_ENABLED=True
+DEV_USER_EMAIL=user@project403.local
+DEV_USER_HANDLE=demo_user
+DEV_USER_FIRST_NAME=Demo
+DEV_USER_LAST_NAME=User
+DEV_USER_PASSWORD=User403pass
+
 # BUILD
 PROJECT_BRANCH=$projectBranch
 
@@ -310,8 +573,16 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 $IsWin = ($env:OS -eq "Windows_NT") -or ($PSVersionTable.Platform -eq "Win32NT")
-Install-SystemDependencies
+if (-not $StopOnly) {
+    Install-SystemDependencies
+}
 Enter-OrCloneProject
+
+if ($StopOnly) {
+    Stop-ExistingProjectProcesses "Stopping project processes"
+    Write-Step "Project processes are stopped"
+    exit 0
+}
 
 $VenvPython = if ($IsWin) {
     Join-Path $Root ".venv\Scripts\python.exe"
@@ -392,6 +663,12 @@ if ($BuildOnly) {
     exit 0
 }
 
+if (-not $NoReplaceExisting) {
+    Stop-ExistingProjectProcesses "Stopping previous project processes"
+}
+
+$startedProcessIds = @{}
+
 Write-Step "Starting backend"
 $backendArgs = @(
     "-m", "uvicorn",
@@ -404,6 +681,8 @@ $backend = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -Worki
 Write-Step "Starting frontend"
 $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort")
 $frontend = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+Add-ProcessTreeToSet -ProcessId $backend.Id -Target $startedProcessIds
+Add-ProcessTreeToSet -ProcessId $frontend.Id -Target $startedProcessIds
 
 Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
@@ -423,6 +702,10 @@ try {
         if ($frontend.HasExited) {
             throw "Frontend process exited with code $($frontend.ExitCode)."
         }
+
+        Add-ProcessTreeToSet -ProcessId $backend.Id -Target $startedProcessIds
+        Add-ProcessTreeToSet -ProcessId $frontend.Id -Target $startedProcessIds
+        Add-ListeningProjectProcessesToSet -Target $startedProcessIds
     }
 }
 finally {
@@ -430,10 +713,9 @@ finally {
 
     foreach ($process in @($backend, $frontend)) {
         if ($null -ne $process) {
-            $process.Refresh()
-            if (-not $process.HasExited) {
-                Stop-Process -Id $process.Id -Force
-            }
+            Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
         }
     }
+
+    Stop-TrackedProcessTrees -ProcessIds $startedProcessIds
 }

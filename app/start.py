@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import json
 import logging
 import time
 
@@ -10,10 +11,47 @@ from app.api.admin import router as api_admin
 from app.db.session import get_public_database_url, init_db
 from app.logging_config import get_request_resource, setup_logging, write_request_log
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import Response
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+SENSITIVE_LOG_KEYS = {
+    "access_token",
+    "authorization",
+    "jwt",
+    "password",
+    "password_hash",
+    "refresh_token",
+    "secret",
+    "token",
+}
+
+
+def redact_log_payload(value):
+    if isinstance(value, dict):
+        return {
+            key: "[redacted]" if key.lower() in SENSITIVE_LOG_KEYS else redact_log_payload(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        return [redact_log_payload(item) for item in value]
+
+    return value
+
+
+def body_for_log(body, content_type=""):
+    text = body.decode("utf-8", errors="replace")
+
+    if "application/json" not in content_type.lower():
+        return text[:10000]
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return text[:10000]
+
+    return json.dumps(redact_log_payload(payload), ensure_ascii=False, default=str)[:10000]
 
 app = FastAPI(
     title=param.APP_NAME,
@@ -40,6 +78,7 @@ app.add_middleware(
 async def log_requests(request, call_next):
     started = time.perf_counter()
     request_body = await request.body()
+    request_content_type = request.headers.get("content-type", "")
 
     async def receive():
         return {
@@ -48,12 +87,12 @@ async def log_requests(request, call_next):
             "more_body": False,
         }
 
-    request_text = request_body.decode("utf-8", errors="replace")
+    request_text = body_for_log(request_body, request_content_type)
     resource = get_request_resource(request.url.path)
     status_code = 500
     headers = {}
     content_type = ""
-    response_body = b""
+    response_text = ""
 
     try:
         request._receive = receive
@@ -61,24 +100,15 @@ async def log_requests(request, call_next):
         status_code = response.status_code
         headers = dict(response.headers)
         content_type = headers.get("content-type", "")
+        response_text = "[response body not logged]"
 
-        async for chunk in response.body_iterator:
-            response_body += chunk
-
-        return Response(
-            content=response_body,
-            status_code=response.status_code,
-            headers=headers,
-            media_type=response.media_type,
-            background=response.background,
-        )
+        return response
     except Exception as exc:
-        response_body = str(exc).encode("utf-8", errors="replace")
+        response_text = str(exc)[:10000]
         logger.exception("Unhandled backend error: %s %s", request.method, request.url.path)
         raise
     finally:
         duration_ms = (time.perf_counter() - started) * 1000
-        response_text = response_body.decode("utf-8", errors="replace")
 
         write_request_log(
             resource,
