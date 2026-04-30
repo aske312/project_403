@@ -5,6 +5,7 @@ import process from 'node:process'
 import { execSync } from 'node:child_process'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+const lock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf-8'))
 const requirements = readFileSync(new URL('./requirements.txt', import.meta.url), 'utf-8')
 
 function getRequirementVersion(name) {
@@ -19,6 +20,10 @@ function getRequirementVersion(name) {
 
 function formatDependency(name, version) {
   return version ? `${name} ${version.replace(/^[~^]/, '')}` : name
+}
+
+function getLockedDependencyVersion(name) {
+  return lock.packages?.[`node_modules/${name}`]?.version
 }
 
 function getPythonVersion() {
@@ -42,6 +47,18 @@ function getGitShortSha() {
   try {
     return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
   } catch {
+    return 'local'
+  }
+}
+
+function getProjectBranch(env) {
+  if (env.PROJECT_BRANCH || env.GIT_BRANCH || env.BRANCH) {
+    return env.PROJECT_BRANCH ?? env.GIT_BRANCH ?? env.BRANCH
+  }
+
+  try {
+    return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'detached'
+  } catch {
     return 'unknown'
   }
 }
@@ -49,17 +66,22 @@ function getGitShortSha() {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const appVersion = `v ${env.VERSION ?? pkg.version} build ${getGitShortSha()}`
+  const projectBranch = getProjectBranch(env)
+  const envBuildId = env.BUILD_ID && env.BUILD_ID.toLowerCase() !== 'dev' ? env.BUILD_ID : null
+  const buildId = envBuildId ?? `${projectBranch}@${getGitShortSha()}`
+  const appVersion = `v ${env.VERSION ?? pkg.version} build ${buildId}`
 
   return {
     plugins: [react()],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+      'import.meta.env.VITE_PROJECT_BRANCH': JSON.stringify(projectBranch),
       'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(
         [
-          'JavaScript',
-          formatDependency('React', pkg.dependencies.react),
-          formatDependency('Vite', pkg.devDependencies.vite),
+          formatDependency('JavaScript V8', process.versions.v8),
+          formatDependency('Node.js', process.versions.node),
+          formatDependency('react', getLockedDependencyVersion('react') ?? pkg.dependencies.react),
+          formatDependency('vite', getLockedDependencyVersion('vite') ?? pkg.devDependencies.vite),
         ].join(', '),
       ),
       'import.meta.env.VITE_BACKEND_STACK': JSON.stringify(

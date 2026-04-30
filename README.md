@@ -47,6 +47,8 @@ Docker нужен только для локального PostgreSQL. При з
 
 После установки Docker Desktop на Windows может понадобиться открыть Docker Desktop, принять условия использования и запустить новую PowerShell-сессию.
 
+Если Docker недоступен или PostgreSQL не поднят, backend использует временный SQLite fallback: `sqlite+aiosqlite:///./local.db`.
+
 Если установка Docker Desktop на Windows завершается ошибкой, проверь:
 
 - PowerShell запущен с правами администратора;
@@ -86,7 +88,7 @@ user: postgres
 password: password
 ```
 
-Backend при старте пытается создать таблицы автоматически, если `AUTO_CREATE_TABLES=True`. Если БД недоступна, backend продолжит стартовать, а `/api/db/check_connect` покажет ошибку подключения.
+Backend при старте пытается создать таблицы автоматически, если `AUTO_CREATE_TABLES=True`. Если PostgreSQL недоступен и `DB_FALLBACK_ENABLED=True`, таблицы будут созданы в локальном SQLite-файле `local.db`.
 
 Создать таблицы вручную через API:
 
@@ -166,6 +168,8 @@ py -3 -m venv .venv
 
 | Method | Path | Назначение |
 | --- | --- | --- |
+| `GET` | `/api/debug/health` | Runtime status: version, env, branch, backend stack |
+| `GET` | `/api/debug/logs/app` | Download application log |
 | `GET` | `/api/debug/check` | Проверка GET |
 | `POST` | `/api/debug/check` | Проверка POST |
 | `PUT` | `/api/debug/check` | Проверка PUT |
@@ -180,16 +184,22 @@ py -3 -m venv .venv
 
 ```env
 APP_NAME=MessengerAPI
+VERSION=0.0.1
 ENV=development
 DEBUG=True
 AUTO_CREATE_TABLES=True
 HOST=0.0.0.0
 PORT=8000
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+DB_FALLBACK_ENABLED=True
+DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
 JWT_SECRET=change_me_before_public_deploy
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
-BUILD_ID=dev
+PROJECT_BRANCH=master
+LOG_FILE=logs/app.log
+LOG_MAX_BYTES=1048576
+LOG_BACKUP_COUNT=3
 VITE_API_URL=http://127.0.0.1:8000
 ```
 

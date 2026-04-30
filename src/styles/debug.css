@@ -228,18 +228,52 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
-.openapi-card-head span {
+.openapi-card-head > span {
   color: var(--primary-text);
   font-size: 12px;
   font-weight: 800;
 }
 
+.runtime-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .openapi-card-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 5px 9px;
   border-radius: 999px;
+  font-size: 12px;
+}
+
+.runtime-env.ok {
   color: var(--success-text);
   background: var(--success-soft);
+}
+
+.runtime-env.error {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.runtime-log-link {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--primary-text);
+  background: var(--surface);
   font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.runtime-log-link:hover {
+  border-color: var(--primary);
 }
 
 .openapi-card dl {
@@ -250,7 +284,7 @@ button {
 
 .openapi-card dl div {
   display: grid;
-  grid-template-columns: 94px minmax(0, 1fr);
+  grid-template-columns: 94px 22px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -273,6 +307,51 @@ button {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 14px;
   font-weight: 700;
+}
+
+.runtime-status {
+  display: grid;
+  place-items: center;
+}
+
+.runtime-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.runtime-row.ok .runtime-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 5px var(--success-soft);
+}
+
+.runtime-row.error .runtime-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 5px var(--danger-soft);
+}
+
+.runtime-env.ok .runtime-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 4px var(--success-soft);
+}
+
+.runtime-env.error .runtime-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-soft);
+}
+
+.runtime-stack-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runtime-stack-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .metric-grid {

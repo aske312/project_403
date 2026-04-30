@@ -4,12 +4,15 @@ import Endpoint from "../components/Endpoint";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+const LOG_DOWNLOAD_URL = `${API_URL}/api/debug/logs/app`;
 
 const fallbackEndpointGroups = [
   {
     id: "debug",
     tone: "blue",
     endpoints: [
+      { method: "GET", path: "/api/debug/health" },
+      { method: "GET", path: "/api/debug/logs/app" },
       { method: "GET", path: "/api/debug/check" },
       { method: "POST", path: "/api/debug/check" },
       { method: "PUT", path: "/api/debug/check" },
@@ -22,6 +25,7 @@ const fallbackEndpointGroups = [
     tone: "green",
     endpoints: [
       { method: "GET", path: "/api/db/check_connect" },
+      { method: "POST", path: "/api/db/init" },
     ],
   },
 ];
@@ -75,6 +79,17 @@ function buildGroupsFromOpenApi(schema) {
   }));
 }
 
+function formatStack(name, version) {
+  return [name, version].filter(Boolean).join(" ");
+}
+
+function splitStack(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const copy = {
   EN: {
     brand: "Project_403",
@@ -88,9 +103,16 @@ const copy = {
     environment: "Development",
     appStatus: "Application in development",
     versionLabel: "Version",
+    environmentLabel: "Environment",
     modeLabel: "Mode",
     backendLabel: "Backend",
+    backendLoading: "Checking backend...",
+    backendUnavailable: "Unavailable",
     frontendLabel: "Frontend",
+    databaseLabel: "Database",
+    databaseLoading: "Checking database...",
+    databaseUnavailable: "Unavailable",
+    downloadLog: "Download log",
     totalChecks: "Checks",
     httpMethods: "HTTP methods",
     serviceChecks: "Service checks",
@@ -116,9 +138,16 @@ const copy = {
     environment: "\u0420\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0430",
     appStatus: "\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0432 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
     versionLabel: "\u0412\u0435\u0440\u0441\u0438\u044f",
+    environmentLabel: "\u0421\u0440\u0435\u0434\u0430",
     modeLabel: "\u0420\u0435\u0436\u0438\u043c",
     backendLabel: "Backend",
+    backendLoading: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 backend...",
+    backendUnavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d",
     frontendLabel: "Frontend",
+    databaseLabel: "\u0411\u0430\u0437\u0430 \u0434\u0430\u043d\u043d\u044b\u0445",
+    databaseLoading: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0411\u0414...",
+    databaseUnavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430",
+    downloadLog: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c \u043b\u043e\u0433",
     totalChecks: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0438",
     httpMethods: "HTTP \u043c\u0435\u0442\u043e\u0434\u044b",
     serviceChecks: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
@@ -165,6 +194,8 @@ export default function Debug() {
     groups: fallbackEndpointGroups,
     source: "fallback",
   });
+  const [backend, setBackend] = useState(null);
+  const [database, setDatabase] = useState(null);
   const t = copy[lang];
 
   useEffect(() => {
@@ -197,7 +228,45 @@ export default function Debug() {
       }
     }
 
+    async function loadDatabaseStatus() {
+      try {
+        const response = await fetch(`${API_URL}/api/db/check_connect`);
+        const payload = await response.json();
+
+        if (!ignore) {
+          setDatabase(payload);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setDatabase({
+            status: "error",
+            error: error.message,
+          });
+        }
+      }
+    }
+
+    async function loadBackendStatus() {
+      try {
+        const response = await fetch(`${API_URL}/api/debug/health`);
+        const payload = await response.json();
+
+        if (!ignore) {
+          setBackend(payload);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setBackend({
+            status: "error",
+            error: error.message,
+          });
+        }
+      }
+    }
+
     loadOpenApiContracts();
+    loadBackendStatus();
+    loadDatabaseStatus();
 
     return () => {
       ignore = true;
@@ -214,13 +283,34 @@ export default function Debug() {
   }, [contracts.groups, t]);
 
   const runtimeSummary = useMemo(() => {
+    const backendItems = backend?.status === "ok"
+      ? [
+          formatStack(backend.language, backend.language_version),
+          formatStack(backend.stack, backend.stack_version),
+        ].filter(Boolean)
+      : backend?.error || t.backendLoading;
+
+    const databaseValue = database ? database.version || database.backend || t.databaseUnavailable : t.databaseLoading;
+
     return [
-      { label: t.versionLabel, value: import.meta.env.VITE_APP_VERSION },
-      { label: t.modeLabel, value: import.meta.env.MODE },
-      { label: t.backendLabel, value: import.meta.env.VITE_BACKEND_STACK },
-      { label: t.frontendLabel, value: import.meta.env.VITE_FRONTEND_STACK },
+      { label: t.versionLabel, value: backend?.version || import.meta.env.VITE_APP_VERSION },
+      { label: t.frontendLabel, items: splitStack(import.meta.env.VITE_FRONTEND_STACK) },
+      {
+        label: t.backendLabel,
+        value: Array.isArray(backendItems) ? null : backendItems || t.backendUnavailable,
+        items: Array.isArray(backendItems) ? backendItems : null,
+        state: backend?.status === "ok" ? "ok" : "error",
+      },
+      {
+        label: t.databaseLabel,
+        items: [databaseValue],
+        state: database?.status === "ok" ? "ok" : "error",
+      },
     ];
-  }, [t]);
+  }, [backend, database, t]);
+
+  const runtimeEnvironment = backend?.environment || import.meta.env.MODE;
+  const runtimeState = backend?.status === "ok" && database?.status === "ok" ? "ok" : "error";
 
   const initials = useMemo(
     () => t.brand.split("_").map((part) => part[0]).join(""),
@@ -272,13 +362,37 @@ export default function Debug() {
           <aside className="openapi-card" aria-label="Runtime summary">
             <div className="openapi-card-head">
               <span>RUNTIME</span>
-              <strong>{import.meta.env.MODE}</strong>
+              <div className="runtime-head-actions">
+                <strong className={`runtime-env ${runtimeState}`}>
+                  <span className="runtime-dot" aria-hidden="true" />
+                  <span>{runtimeEnvironment}</span>
+                </strong>
+                <a className="runtime-log-link" href={LOG_DOWNLOAD_URL} download>
+                  {t.downloadLog}
+                </a>
+              </div>
             </div>
             <dl>
               {runtimeSummary.map((item) => (
-                <div key={item.label}>
+                <div
+                  className={item.state ? `runtime-row ${item.state}` : "runtime-row"}
+                  key={item.label}
+                >
                   <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
+                  <dd className="runtime-status">
+                    {item.state && <span className="runtime-dot" aria-hidden="true" />}
+                  </dd>
+                  <dd>
+                    {item.items ? (
+                      <ul className="runtime-stack-list">
+                        {item.items.map((stackItem) => (
+                          <li key={stackItem}>{stackItem}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      item.value
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>

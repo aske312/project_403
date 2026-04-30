@@ -245,9 +245,15 @@ ensure_env_file() {
     fi
 
     step "Creating default .env"
+    local project_branch
+    project_branch="$(git branch --show-current 2>/dev/null || true)"
+    if [[ -z "$project_branch" ]]; then
+        project_branch="unknown"
+    fi
     cat > .env <<EOF
 # APPLICATION
 APP_NAME=MessengerAPI
+VERSION=0.0.1
 ENV=development
 DEBUG=True
 AUTO_CREATE_TABLES=True
@@ -258,6 +264,8 @@ PORT=$BACKEND_PORT
 
 # DATABASE
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+DB_FALLBACK_ENABLED=True
+DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
 
 # AUTH
 JWT_SECRET=change_me_before_public_deploy
@@ -265,7 +273,12 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 # BUILD
-BUILD_ID=dev
+PROJECT_BRANCH=$project_branch
+
+# LOGGING
+LOG_FILE=logs/app.log
+LOG_MAX_BYTES=1048576
+LOG_BACKUP_COUNT=3
 
 # UI_API
 VITE_API_URL=http://$BACKEND_HOST:$BACKEND_PORT
