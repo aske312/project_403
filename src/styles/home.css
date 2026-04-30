@@ -132,6 +132,78 @@ input {
   box-shadow: 0 0 0 1px var(--border);
 }
 
+.account-menu {
+  position: relative;
+}
+
+.account-button {
+  min-height: 38px;
+  max-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.account-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.account-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(280px, calc(100vw - 36px));
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.account-name {
+  font-weight: 900;
+}
+
+.account-meta,
+.account-stub {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.account-stub {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .auth-shell {
   width: min(1120px, calc(100% - 36px));
   flex: 1;
@@ -286,6 +358,12 @@ input {
   font-weight: 600;
 }
 
+.auth-form small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .auth-form input[type="text"],
 .auth-form input[type="email"],
 .auth-form input[type="password"] {
@@ -431,6 +509,20 @@ input {
   .header-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .account-menu {
+    width: 100%;
+  }
+
+  .account-button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .account-dropdown {
+    right: auto;
+    left: 0;
   }
 
   .auth-shell,

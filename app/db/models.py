@@ -13,6 +13,9 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    handle: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
     name: Mapped[str] = mapped_column(String(120))
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(

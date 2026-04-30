@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb
 ./start.sh --start-db
 ```
 
-Стартовые скрипты создают `.env`, `.venv`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
+Стартовые скрипты создают `.env`, `.venv`, обновляют `pip`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
 
 Docker нужен только для локального PostgreSQL. При запуске с БД скрипты проверяют Docker и пробуют установить его автоматически:
 
@@ -152,6 +152,7 @@ Linux:
 
 ```bash
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m uvicorn app.start:app --host 127.0.0.1 --port 8000
 ```
@@ -160,6 +161,7 @@ Windows:
 
 ```powershell
 py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app.start:app --host 127.0.0.1 --port 8000
 ```

@@ -347,6 +347,9 @@ if [[ "$SKIP_INSTALL" -eq 0 ]]; then
         python3 -m venv .venv
     fi
 
+    step "Updating pip"
+    .venv/bin/python -m pip install --upgrade pip
+
     step "Installing Python dependencies"
     .venv/bin/python -m pip install -r requirements.txt
 

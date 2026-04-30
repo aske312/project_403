@@ -351,6 +351,9 @@ if (-not $SkipInstall) {
         Invoke-Checked $basePython.File ($basePython.Args + @("-m", "venv", ".venv"))
     }
 
+    Write-Step "Updating pip"
+    Invoke-Checked $VenvPython @("-m", "pip", "install", "--upgrade", "pip")
+
     Write-Step "Installing Python dependencies"
     Invoke-Checked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
 

@@ -107,32 +107,3 @@ def check_get():
         "status": "OK",
         "message": "GET is ok"
     }
-
-@router.post("/api/admin/check")
-def check_post():
-    return {
-        "status": "OK",
-        "message": "POST is ok"
-    }
-
-@router.put("/api/admin/check")
-def check_put():
-    return {
-        "status": "OK",
-        "message": "PUT is ok"
-    }
-
-@router.patch("/api/admin/check")
-def check_patch():
-    return {
-        "status": "OK",
-        "message": "PATCH is ok"
-    }
-
-
-@router.delete("/api/admin/check")
-def check_delete():
-    return {
-        "status": "OK",
-        "message": "DELETE is ok"
-    }

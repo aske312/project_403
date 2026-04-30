@@ -65,7 +65,7 @@ class Parameters:
     DB_FALLBACK_ENABLED = os.getenv("DB_FALLBACK_ENABLED", "True") == "True"
 
     # Auth
-    JWT_SECRET = os.getenv("JWT_SECRET")
+    JWT_SECRET = os.getenv("JWT_SECRET", "change_me_before_public_deploy")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 

@@ -65,6 +65,12 @@ def get_request_resource(path):
     if segments[:2] == ["api", "admin"]:
         return "app-api-admin"
 
+    if segments[:2] == ["api", "auth"]:
+        return "app-api-auth"
+
+    if segments[:2] == ["api", "users"]:
+        return "app-api-users"
+
     if segments and segments[0] == "api":
         return f"app-api-{segments[1]}" if len(segments) > 1 else "app-api"
 

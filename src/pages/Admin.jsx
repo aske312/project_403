@@ -13,6 +13,9 @@ const fallbackEndpoints = [
   { method: "PUT", path: "/api/admin/check" },
   { method: "PATCH", path: "/api/admin/check" },
   { method: "DELETE", path: "/api/admin/check" },
+  { method: "POST", path: "/api/auth/register" },
+  { method: "POST", path: "/api/auth/login" },
+  { method: "GET", path: "/api/users/me" },
   { method: "GET", path: "/api/db/check_connect" },
   { method: "POST", path: "/api/db/init" },
 ];
@@ -51,6 +54,9 @@ const copy = {
     logs: "Logs",
     noLogs: "No logs yet",
     download: "Download",
+    accountMenu: "Account",
+    accountStub: "Account menu will be added later.",
+    userTag: "Tag",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -77,6 +83,9 @@ const copy = {
     logs: "\u041b\u043e\u0433\u0438",
     noLogs: "\u041b\u043e\u0433\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
     download: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c",
+    accountMenu: "\u0410\u043a\u043a\u0430\u0443\u043d\u0442",
+    accountStub: "\u041c\u0435\u043d\u044e \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430 \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u043f\u043e\u0437\u0436\u0435.",
+    userTag: "\u0422\u0435\u0433",
     github: "GitHub",
     vk: "VK",
     telegram: "Telegram",
@@ -158,6 +167,8 @@ export default function Admin() {
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const t = copy[lang];
   const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
@@ -212,10 +223,38 @@ export default function Admin() {
       }
     }
 
+    async function loadProfile() {
+      const token = window.localStorage.getItem("access_token");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/users/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          window.localStorage.removeItem("access_token");
+          if (!ignore) {
+            setProfile(null);
+            setAccountOpen(false);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!ignore) setProfile(payload);
+      } catch {
+        if (!ignore) setProfile(null);
+      }
+    }
+
     loadOpenApi();
     loadBackend();
     loadDatabase();
     loadLogs();
+    loadProfile();
 
     return () => {
       ignore = true;
@@ -281,9 +320,37 @@ export default function Admin() {
             {theme === "light" ? t.themeDark : t.themeLight}
           </button>
 
-          <a className="admin-home-link" href="/">
-            {t.home}
-          </a>
+          {profile && (
+            <div className="admin-account-menu">
+              <button
+                className="admin-account-button"
+                type="button"
+                onClick={() => setAccountOpen((value) => !value)}
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+                title={t.accountMenu}
+              >
+                <span className="admin-account-avatar" aria-hidden="true">
+                  {profile.name?.[0]?.toUpperCase() || "U"}
+                </span>
+                <span className="admin-account-label">
+                  {profile.tag || profile.handle || profile.name}
+                </span>
+              </button>
+
+              {accountOpen && (
+                <div className="admin-account-dropdown" role="menu">
+                  <div className="admin-account-name">{profile.name}</div>
+                  <div className="admin-account-meta">{profile.email}</div>
+                  <div className="admin-account-meta">
+                    {t.userTag}: {profile.tag || `@${profile.handle}`}
+                  </div>
+                  <div className="admin-account-stub">{t.accountStub}</div>
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </header>
 
@@ -383,6 +450,7 @@ export default function Admin() {
         </div>
 
         <nav className="footer-links" aria-label="Footer">
+          <a href="/">{t.home}</a>
           <a href="https://github.com/aske312/project_403/blob/master/README.md">{t.github}</a>
           <a href="https://vk.com/aske312">{t.vk}</a>
           <a href="https://t.me/aske312">{t.telegram}</a>
