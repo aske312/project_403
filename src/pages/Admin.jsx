@@ -1,169 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import "../styles/admin.css";
+import { Navigate } from "react-router-dom";
+import AdminAccessPanel from "../components/AdminAccessPanel";
+import AdminApiSection from "../components/AdminApiSection";
+import AdminLogsSection from "../components/AdminLogsSection";
+import AdminServiceOverview from "../components/AdminServiceOverview";
 import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
-import Endpoint from "../components/Endpoint";
+import {
+  API_URL,
+  checkDatabase,
+  getHealth,
+  getLogs,
+  getOpenApi,
+} from "../utils/apiClient";
+import { adminCopy } from "../utils/adminCopy";
+import {
+  buildEndpointsFromOpenApi,
+  buildServiceRows,
+  fallbackEndpoints,
+} from "../utils/adminData";
 import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
-
-const fallbackEndpoints = [
-  { method: "GET", path: "/api/admin/health" },
-  { method: "GET", path: "/api/admin/logs" },
-  { method: "GET", path: "/api/admin/check" },
-  { method: "POST", path: "/api/admin/check" },
-  { method: "PUT", path: "/api/admin/check" },
-  { method: "PATCH", path: "/api/admin/check" },
-  { method: "DELETE", path: "/api/admin/check" },
-  { method: "POST", path: "/api/auth/register" },
-  { method: "POST", path: "/api/auth/login" },
-  { method: "GET", path: "/api/users/me" },
-  { method: "GET", path: "/api/db/check_connect" },
-  { method: "POST", path: "/api/db/init" },
-];
-
-const copy = {
-  EN: {
-    home: "Home",
-    language: "RU",
-    themeLight: "Light theme",
-    themeDark: "Dark theme",
-    pageName: "Services",
-    pageTitle: "Administration panel",
-    pageSubtitle: "Service state, build context and API diagnostics for local operation.",
-    projectState: "Project state",
-    buildVersion: "Build version",
-    services: "Services",
-    serviceColumn: "Services",
-    stack: "Stack",
-    backend: "Backend",
-    database: "Database",
-    frontend: "Frontend",
-    unavailable: "Unavailable",
-    checking: "Checking...",
-    apiSurface: "API surface",
-    logs: "Logs",
-    noLogs: "No logs yet",
-    download: "Download",
-    accountMenu: "Account",
-    accountStub: "Available sections depend on role, permissions and environment.",
-    logout: "Log out",
-    adminPanel: "Admin panel",
-    adminAccessReason: "Access is open: super admin + owner role + DEV.",
-    userRole: "Role",
-    userPermissions: "Permissions",
-    userTag: "Tag",
-    github: "GitHub",
-    vk: "VK",
-    telegram: "Telegram",
-    roles: {
-      owner: "Owner",
-      user: "User",
-    },
-    permissions: {
-      super_admin: "Super admin",
-    },
-    accessCheckingTitle: "Checking access",
-    accessCheckingText: "Admin panel opens only after profile and environment are verified.",
-    accessDeniedTitle: "Admin panel is hidden",
-    accessDeniedText: "Access requires DEV environment, owner role and super admin permission.",
-  },
-  RU: {
-    home: "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e",
-    language: "EN",
-    themeLight: "\u0421\u0432\u0435\u0442\u043b\u0430\u044f \u0442\u0435\u043c\u0430",
-    themeDark: "\u0422\u0435\u043c\u043d\u0430\u044f \u0442\u0435\u043c\u0430",
-    pageName: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
-    pageTitle: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
-    pageSubtitle: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u0441\u043b\u0443\u0436\u0431, \u043a\u043e\u043d\u0442\u0435\u043a\u0441\u0442 \u0441\u0431\u043e\u0440\u043a\u0438 \u0438 API-\u0434\u0438\u0430\u0433\u043d\u043e\u0441\u0442\u0438\u043a\u0430 \u0434\u043b\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0440\u0430\u0431\u043e\u0442\u044b.",
-    projectState: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u0430",
-    buildVersion: "\u0412\u0435\u0440\u0441\u0438\u044f \u0441\u0431\u043e\u0440\u043a\u0438",
-    services: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
-    serviceColumn: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
-    stack: "\u0421\u0442\u0435\u043a",
-    backend: "Backend",
-    database: "\u0411\u0430\u0437\u0430 \u0434\u0430\u043d\u043d\u044b\u0445",
-    frontend: "Frontend",
-    unavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d",
-    checking: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430...",
-    apiSurface: "API",
-    logs: "\u041b\u043e\u0433\u0438",
-    noLogs: "\u041b\u043e\u0433\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
-    download: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c",
-    accountMenu: "\u0410\u043a\u043a\u0430\u0443\u043d\u0442",
-    accountStub: "\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u0440\u0430\u0437\u0434\u0435\u043b\u044b \u0437\u0430\u0432\u0438\u0441\u044f\u0442 \u043e\u0442 \u0440\u043e\u043b\u0438, \u043f\u0440\u0430\u0432 \u0438 \u0441\u0440\u0435\u0434\u044b.",
-    logout: "\u0412\u044b\u0439\u0442\u0438",
-    adminPanel: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
-    adminAccessReason: "\u0414\u043e\u0441\u0442\u0443\u043f \u043e\u0442\u043a\u0440\u044b\u0442: super admin + \u0440\u043e\u043b\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u0435\u0446 + DEV.",
-    userRole: "\u0420\u043e\u043b\u044c",
-    userPermissions: "\u041f\u0440\u0430\u0432\u0430",
-    userTag: "\u0422\u0435\u0433",
-    github: "GitHub",
-    vk: "VK",
-    telegram: "Telegram",
-    roles: {
-      owner: "\u0412\u043b\u0430\u0434\u0435\u0446",
-      user: "\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c",
-    },
-    permissions: {
-      super_admin: "Super admin",
-    },
-    accessCheckingTitle: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0434\u043e\u0441\u0442\u0443\u043f\u0430",
-    accessCheckingText: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e\u0441\u043b\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043f\u0440\u043e\u0444\u0438\u043b\u044f \u0438 \u0441\u0440\u0435\u0434\u044b.",
-    accessDeniedTitle: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c \u0441\u043a\u0440\u044b\u0442\u0430",
-    accessDeniedText: "\u0414\u043b\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043d\u0443\u0436\u043d\u044b DEV-\u0441\u0440\u0435\u0434\u0430, \u0440\u043e\u043b\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u0435\u0446 \u0438 \u043f\u0440\u0430\u0432\u043e super admin.",
-  },
-};
-
-function formatStack(name, version) {
-  return [name, version].filter(Boolean).join(" ");
-}
-
-function splitStack(value) {
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function buildEndpointsFromOpenApi(schema) {
-  return Object.entries(schema?.paths || {})
-    .flatMap(([path, operations]) =>
-      Object.keys(operations || {})
-        .filter((method) => HTTP_METHODS.has(method))
-        .map((method) => ({
-          method: method.toUpperCase(),
-          path,
-        })),
-    )
-    .sort((a, b) => `${a.path}:${a.method}`.localeCompare(`${b.path}:${b.method}`));
-}
-
-function getDatabaseServiceState(database) {
-  if (!database) return "unknown";
-  if (database.status !== "ok") return "error";
-  return database.backend === "postgresql" ? "ok" : "warning";
-}
-
-function StatusPill({ state, label }) {
-  return (
-    <span className={`service-pill ${state}`}>
-      <span aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function formatBytes(size) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatLogTime(value) {
-  return new Date(value * 1000).toLocaleString();
-}
+import { useAuthSession } from "../utils/useAuthSession";
+import "../styles/admin.css";
 
 export default function Admin() {
   const [theme, setTheme] = useState("dark");
@@ -172,71 +30,33 @@ export default function Admin() {
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const {
+    profile,
+    profileLoaded,
+    accountOpen,
+    setAccountOpen,
+    logout,
+  } = useAuthSession();
 
-  const t = copy[lang];
+  const t = adminCopy[lang];
   const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
   const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
   const adminAccessAllowed = canUseAdminPanel(profile, env);
   const accessReady = Boolean(backend) && profileLoaded;
-
-  const handleLogout = () => {
-    window.localStorage.removeItem("access_token");
-    setProfile(null);
-    setAccountOpen(false);
-    setProfileLoaded(true);
-  };
 
   useEffect(() => {
     let ignore = false;
 
     async function loadBackend() {
       try {
-        const response = await fetch(`${API_URL}/api/admin/health`);
-        const payload = await response.json();
+        const { payload } = await getHealth();
         if (!ignore) setBackend(payload);
       } catch (error) {
         if (!ignore) setBackend({ status: "error", error: error.message });
       }
     }
 
-    async function loadProfile() {
-      const token = window.localStorage.getItem("access_token");
-      if (!token) {
-        if (!ignore) setProfileLoaded(true);
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_URL}/api/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          window.localStorage.removeItem("access_token");
-          if (!ignore) {
-            setProfile(null);
-            setAccountOpen(false);
-            setProfileLoaded(true);
-          }
-          return;
-        }
-
-        const payload = await response.json();
-        if (!ignore) setProfile(payload);
-      } catch {
-        if (!ignore) setProfile(null);
-      } finally {
-        if (!ignore) setProfileLoaded(true);
-      }
-    }
-
     loadBackend();
-    loadProfile();
 
     return () => {
       ignore = true;
@@ -250,10 +70,7 @@ export default function Admin() {
 
     async function loadOpenApi() {
       try {
-        const response = await fetch(`${API_URL}/openapi.json`);
-        if (!response.ok) throw new Error(`OpenAPI ${response.status}`);
-
-        const schema = await response.json();
+        const schema = await getOpenApi();
         const nextEndpoints = buildEndpointsFromOpenApi(schema);
 
         if (!ignore && nextEndpoints.length > 0) {
@@ -266,8 +83,7 @@ export default function Admin() {
 
     async function loadDatabase() {
       try {
-        const response = await fetch(`${API_URL}/api/db/check_connect`);
-        const payload = await response.json();
+        const { payload } = await checkDatabase();
         if (!ignore) setDatabase(payload);
       } catch (error) {
         if (!ignore) setDatabase({ status: "error", error: error.message });
@@ -276,8 +92,7 @@ export default function Admin() {
 
     async function loadLogs() {
       try {
-        const response = await fetch(`${API_URL}/api/admin/logs`);
-        const payload = await response.json();
+        const { payload } = await getLogs();
         if (!ignore) setLogs(payload.logs || []);
       } catch {
         if (!ignore) setLogs([]);
@@ -293,36 +108,14 @@ export default function Admin() {
     };
   }, [accessReady, adminAccessAllowed]);
 
-  const serviceRows = useMemo(() => {
-    const backendOk = backend?.status === "ok";
-    const databaseState = getDatabaseServiceState(database);
+  const serviceRows = useMemo(
+    () => buildServiceRows(t, backend, database),
+    [backend, database, t],
+  );
 
-    return [
-      {
-        id: "frontend",
-        name: t.frontend,
-        state: "ok",
-        stack: splitStack(import.meta.env.VITE_FRONTEND_STACK),
-      },
-      {
-        id: "backend",
-        name: t.backend,
-        state: backendOk ? "ok" : "error",
-        stack: backendOk
-          ? [
-              formatStack(backend.language, backend.language_version),
-              formatStack(backend.stack, backend.stack_version),
-            ].filter(Boolean)
-          : [backend?.error || t.unavailable],
-      },
-      {
-        id: "database",
-        name: t.database,
-        state: databaseState,
-        stack: [database?.version || database?.backend || t.checking],
-      },
-    ];
-  }, [backend, database, t]);
+  if (accessReady && !adminAccessAllowed) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className={`admin-page ${theme}`}>
@@ -338,122 +131,25 @@ export default function Admin() {
         onToggleAccount={() => setAccountOpen((value) => !value)}
         onToggleLang={() => setLang(lang === "RU" ? "EN" : "RU")}
         onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
-        onLogout={handleLogout}
+        onLogout={logout}
         adminLinkVisible={adminAccessAllowed}
         adminLinkLabel={t.adminPanel}
         adminAccessReason={t.adminAccessReason}
       />
 
-      {!accessReady || !adminAccessAllowed ? (
-        <main className="admin-layout">
-          <section className="access-panel">
-            <div>
-              <p className="admin-eyebrow">{t.pageName}</p>
-              <h1>{accessReady ? t.accessDeniedTitle : t.accessCheckingTitle}</h1>
-              <p>{accessReady ? t.accessDeniedText : t.accessCheckingText}</p>
-            </div>
-
-            <div className="status-panel">
-              <div className="status-panel-head">
-                <span>{t.projectState}</span>
-                <StatusPill state={env.state} label={env.label} />
-              </div>
-              <div className="status-version">
-                <span>{t.buildVersion}</span>
-                <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
-              </div>
-            </div>
-          </section>
-        </main>
+      {!accessReady ? (
+        <AdminAccessPanel t={t} env={env} backend={backend} />
       ) : (
-      <main className="admin-layout">
-        <section className="service-hero">
-          <div>
-            <p className="admin-eyebrow">{t.pageName}</p>
-            <h1>{t.pageTitle}</h1>
-            <p>{t.pageSubtitle}</p>
-          </div>
-
-          <div className="status-panel">
-            <div className="status-panel-head">
-              <span>{t.projectState}</span>
-              <StatusPill state={env.state} label={env.label} />
-            </div>
-            <div className="status-version">
-              <span>{t.buildVersion}</span>
-              <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="services-section" aria-label={t.services}>
-          <div className="section-head">
-            <h2>{t.services}</h2>
-            <span>{serviceRows.length}</span>
-          </div>
-
-          <div className="service-table">
-            <div className="service-table-head">
-              <span>{t.serviceColumn}</span>
-              <span>{t.stack}</span>
-            </div>
-
-            {serviceRows.map((service) => (
-              <div className="service-row" key={service.id}>
-                <StatusPill state={service.state} label={service.name} />
-                <ul>
-                  {service.stack.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="api-section" aria-label={t.apiSurface}>
-          <div className="section-head">
-            <h2>{t.apiSurface}</h2>
-            <span>{endpoints.length}</span>
-          </div>
-
-          <div className="endpoint-stack">
-            {endpoints.map((endpoint) => (
-              <Endpoint
-                key={`${endpoint.method}-${endpoint.path}`}
-                method={endpoint.method}
-                path={endpoint.path}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section className="logs-section" aria-label={t.logs}>
-          <div className="section-head">
-            <h2>{t.logs}</h2>
-            <span>{logs.length}</span>
-          </div>
-
-          <div className="log-list">
-            {logs.length === 0 ? (
-              <div className="empty-log-list">{t.noLogs}</div>
-            ) : (
-              logs.map((log) => (
-                <div className="log-row" key={`${log.date}-${log.file}`}>
-                  <div>
-                    <strong>{log.file}</strong>
-                    <span>{log.resource} · {formatLogTime(log.updated_at)}</span>
-                  </div>
-                  <span>{formatBytes(log.size)}</span>
-                  <a href={`${API_URL}${log.download_url}`} download>
-                    {t.download}
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      </main>
+        <main className="admin-layout">
+          <AdminServiceOverview
+            t={t}
+            env={env}
+            backend={backend}
+            serviceRows={serviceRows}
+          />
+          <AdminApiSection t={t} endpoints={endpoints} />
+          <AdminLogsSection t={t} logs={logs} apiUrl={API_URL} />
+        </main>
       )}
 
       <AppFooter
