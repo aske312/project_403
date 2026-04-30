@@ -38,7 +38,7 @@ def get_project_branch():
 
 class Parameters:
     # App
-    APP_NAME = os.getenv("APP_NAME", "DEBUG_APP_NAME")
+    APP_NAME = os.getenv("APP_NAME", "Project_403")
     VERSION = f"v {os.getenv('VERSION', '0.0.1')} build {get_build_id()}"
     PROJECT_BRANCH = get_project_branch()
     PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"

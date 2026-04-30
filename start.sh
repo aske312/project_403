@@ -252,7 +252,7 @@ ensure_env_file() {
     fi
     cat > .env <<EOF
 # APPLICATION
-APP_NAME=MessengerAPI
+APP_NAME=Project_403
 VERSION=0.0.1
 ENV=development
 DEBUG=True

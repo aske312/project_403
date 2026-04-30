@@ -75,6 +75,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+      'import.meta.env.VITE_APP_NAME': JSON.stringify(env.APP_NAME ?? pkg.name),
       'import.meta.env.VITE_PROJECT_BRANCH': JSON.stringify(projectBranch),
       'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(
         [

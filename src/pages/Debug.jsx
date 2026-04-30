@@ -3,80 +3,91 @@ import "../styles/debug.css";
 import Endpoint from "../components/Endpoint";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 const LOG_DOWNLOAD_URL = `${API_URL}/api/debug/logs/app`;
+const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 
-const fallbackEndpointGroups = [
-  {
-    id: "debug",
-    tone: "blue",
-    endpoints: [
-      { method: "GET", path: "/api/debug/health" },
-      { method: "GET", path: "/api/debug/logs/app" },
-      { method: "GET", path: "/api/debug/check" },
-      { method: "POST", path: "/api/debug/check" },
-      { method: "PUT", path: "/api/debug/check" },
-      { method: "PATCH", path: "/api/debug/check" },
-      { method: "DELETE", path: "/api/debug/check" },
-    ],
-  },
-  {
-    id: "database",
-    tone: "green",
-    endpoints: [
-      { method: "GET", path: "/api/db/check_connect" },
-      { method: "POST", path: "/api/db/init" },
-    ],
-  },
+const fallbackEndpoints = [
+  { method: "GET", path: "/api/debug/health" },
+  { method: "GET", path: "/api/debug/logs/app" },
+  { method: "GET", path: "/api/debug/check" },
+  { method: "POST", path: "/api/debug/check" },
+  { method: "PUT", path: "/api/debug/check" },
+  { method: "PATCH", path: "/api/debug/check" },
+  { method: "DELETE", path: "/api/debug/check" },
+  { method: "GET", path: "/api/db/check_connect" },
+  { method: "POST", path: "/api/db/init" },
 ];
 
-function formatGroupName(id) {
-  return id
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
+const envStates = {
+  active: "active",
+  deactive: "deactive",
+  inactive: "deactive",
+  debug: "debug",
+  dev: "dev",
+  development: "dev",
+  close: "close",
+  closed: "close",
+};
 
-function getGroupId(path) {
-  const segments = path.split("/").filter(Boolean);
+const copy = {
+  EN: {
+    home: "Home",
+    language: "RU",
+    themeLight: "Light theme",
+    themeDark: "Dark theme",
+    pageName: "Services",
+    pageTitle: "Administration panel",
+    pageSubtitle: "Service state, build context and API diagnostics for local operation.",
+    projectState: "Project state",
+    buildVersion: "Build version",
+    services: "Services",
+    serviceColumn: "Services",
+    stack: "Stack",
+    backend: "Backend",
+    database: "Database",
+    frontend: "Frontend",
+    unavailable: "Unavailable",
+    checking: "Checking...",
+    apiSurface: "API surface",
+    downloadLog: "Download log",
+    github: "GitHub",
+    vk: "VK",
+    telegram: "Telegram",
+  },
+  RU: {
+    home: "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e",
+    language: "EN",
+    themeLight: "\u0421\u0432\u0435\u0442\u043b\u0430\u044f \u0442\u0435\u043c\u0430",
+    themeDark: "\u0422\u0435\u043c\u043d\u0430\u044f \u0442\u0435\u043c\u0430",
+    pageName: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
+    pageTitle: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c",
+    pageSubtitle: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u0441\u043b\u0443\u0436\u0431, \u043a\u043e\u043d\u0442\u0435\u043a\u0441\u0442 \u0441\u0431\u043e\u0440\u043a\u0438 \u0438 API-\u0434\u0438\u0430\u0433\u043d\u043e\u0441\u0442\u0438\u043a\u0430 \u0434\u043b\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0440\u0430\u0431\u043e\u0442\u044b.",
+    projectState: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u0430",
+    buildVersion: "\u0412\u0435\u0440\u0441\u0438\u044f \u0441\u0431\u043e\u0440\u043a\u0438",
+    services: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
+    serviceColumn: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
+    stack: "\u0421\u0442\u0435\u043a",
+    backend: "Backend",
+    database: "\u0411\u0430\u0437\u0430 \u0434\u0430\u043d\u043d\u044b\u0445",
+    frontend: "Frontend",
+    unavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d",
+    checking: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430...",
+    apiSurface: "API",
+    downloadLog: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c \u043b\u043e\u0433",
+    github: "GitHub",
+    vk: "VK",
+    telegram: "Telegram",
+  },
+};
 
-  if (segments[0] === "api" && segments[1]) {
-    return segments[1];
-  }
-
-  return segments[0] || "root";
-}
-
-function getGroupTone(index) {
-  const tones = ["blue", "green", "blue", "green"];
-  return tones[index % tones.length];
-}
-
-function buildGroupsFromOpenApi(schema) {
-  const paths = schema?.paths || {};
-  const groups = new Map();
-
-  Object.entries(paths).forEach(([path, operations]) => {
-    Object.keys(operations || {}).forEach((method) => {
-      if (!HTTP_METHODS.has(method)) return;
-
-      const id = getGroupId(path);
-      const group = groups.get(id) || {
-        id,
-        endpoints: [],
-      };
-
-      group.endpoints.push({
-        method: method.toUpperCase(),
-        path,
-      });
-      groups.set(id, group);
-    });
-  });
-
-  return Array.from(groups.values()).map((group, index) => ({
-    ...group,
-    tone: getGroupTone(index),
-  }));
+function getInitials(name) {
+  return String(name || "P")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
 }
 
 function formatStack(name, version) {
@@ -90,239 +101,139 @@ function splitStack(value) {
     .filter(Boolean);
 }
 
-const copy = {
-  EN: {
-    brand: "Project_403",
-    home: "Home",
-    language: "RU",
-    themeLight: "Light theme",
-    themeDark: "Dark theme",
-    eyebrow: "OpenAPI contract checks",
-    title: "Functional API debugging",
-    description: "Validate API contracts while debugging application behavior: run focused probes, inspect real responses and compare runtime output with the expected endpoint surface.",
-    environment: "Development",
-    appStatus: "Application in development",
-    versionLabel: "Version",
-    environmentLabel: "Environment",
-    modeLabel: "Mode",
-    backendLabel: "Backend",
-    backendLoading: "Checking backend...",
-    backendUnavailable: "Unavailable",
-    frontendLabel: "Frontend",
-    databaseLabel: "Database",
-    databaseLoading: "Checking database...",
-    databaseUnavailable: "Unavailable",
-    downloadLog: "Download log",
-    totalChecks: "Checks",
-    httpMethods: "HTTP methods",
-    serviceChecks: "Service checks",
-    contractText: "Contracts discovered from the active OpenAPI schema.",
-    fallbackText: "Fallback checks are shown because OpenAPI schema is unavailable.",
-    schemaLoaded: "Contracts loaded from OpenAPI schema.",
-    schemaFallback: "OpenAPI schema is unavailable. Showing fallback checks.",
-    runHint: "Click an endpoint row to send the request and inspect the response.",
-    footerStatus: "Internal diagnostics",
-    github: "GitHub",
-    vk: "VK",
-    telegram: "Telegram",
-  },
-  RU: {
-    brand: "Project_403",
-    home: "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e",
-    language: "EN",
-    themeLight: "\u0421\u0432\u0435\u0442\u043b\u0430\u044f \u0442\u0435\u043c\u0430",
-    themeDark: "\u0422\u0435\u043c\u043d\u0430\u044f \u0442\u0435\u043c\u0430",
-    eyebrow: "OpenAPI contract checks",
-    title: "\u041e\u0442\u043b\u0430\u0434\u043a\u0430 API-\u0444\u0443\u043d\u043a\u0446\u0438\u0439",
-    description: "\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0439\u0442\u0435 API-\u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u044b \u0432\u043e \u0432\u0440\u0435\u043c\u044f \u043e\u0442\u043b\u0430\u0434\u043a\u0438 \u0444\u0443\u043d\u043a\u0446\u0438\u0439: \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u0439\u0442\u0435 \u0442\u043e\u0447\u0435\u0447\u043d\u044b\u0435 \u043f\u0440\u043e\u0431\u044b, \u0441\u043c\u043e\u0442\u0440\u0438\u0442\u0435 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 response \u0438 \u0441\u0432\u0435\u0440\u044f\u0439\u0442\u0435 runtime-\u0432\u044b\u0432\u043e\u0434 \u0441 \u043e\u0436\u0438\u0434\u0430\u0435\u043c\u043e\u0439 API-\u043f\u043e\u0432\u0435\u0440\u0445\u043d\u043e\u0441\u0442\u044c\u044e.",
-    environment: "\u0420\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0430",
-    appStatus: "\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0432 \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
-    versionLabel: "\u0412\u0435\u0440\u0441\u0438\u044f",
-    environmentLabel: "\u0421\u0440\u0435\u0434\u0430",
-    modeLabel: "\u0420\u0435\u0436\u0438\u043c",
-    backendLabel: "Backend",
-    backendLoading: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 backend...",
-    backendUnavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d",
-    frontendLabel: "Frontend",
-    databaseLabel: "\u0411\u0430\u0437\u0430 \u0434\u0430\u043d\u043d\u044b\u0445",
-    databaseLoading: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0411\u0414...",
-    databaseUnavailable: "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430",
-    downloadLog: "\u0421\u043a\u0430\u0447\u0430\u0442\u044c \u043b\u043e\u0433",
-    totalChecks: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0438",
-    httpMethods: "HTTP \u043c\u0435\u0442\u043e\u0434\u044b",
-    serviceChecks: "\u0421\u0435\u0440\u0432\u0438\u0441\u044b",
-    contractText: "\u041a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u044b, \u043d\u0430\u0439\u0434\u0435\u043d\u043d\u044b\u0435 \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 OpenAPI-\u0441\u0445\u0435\u043c\u0435.",
-    fallbackText: "Fallback checks \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b, \u043f\u043e\u0442\u043e\u043c\u0443 \u0447\u0442\u043e OpenAPI-\u0441\u0445\u0435\u043c\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430.",
-    schemaLoaded: "\u041a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u044b \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u044b \u0438\u0437 OpenAPI-\u0441\u0445\u0435\u043c\u044b.",
-    schemaFallback: "OpenAPI-\u0441\u0445\u0435\u043c\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430. \u041f\u043e\u043a\u0430\u0437\u0430\u043d\u044b fallback checks.",
-    runHint: "\u041d\u0430\u0436\u043c\u0438\u0442\u0435 endpoint, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c request \u0438 \u043f\u043e\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c response.",
-    footerStatus: "\u0412\u043d\u0443\u0442\u0440\u0435\u043d\u043d\u044f\u044f \u0434\u0438\u0430\u0433\u043d\u043e\u0441\u0442\u0438\u043a\u0430",
-    github: "GitHub",
-    vk: "VK",
-    telegram: "Telegram",
-  },
-};
+function normalizeEnvironment(value) {
+  const raw = String(value || "dev").trim();
+  const key = raw.toLowerCase();
+  return {
+    label: raw.toUpperCase(),
+    state: envStates[key] || "dev",
+  };
+}
 
-function EndpointGroup({ title, text, tone, endpoints }) {
+function buildEndpointsFromOpenApi(schema) {
+  return Object.entries(schema?.paths || {})
+    .flatMap(([path, operations]) =>
+      Object.keys(operations || {})
+        .filter((method) => HTTP_METHODS.has(method))
+        .map((method) => ({
+          method: method.toUpperCase(),
+          path,
+        })),
+    )
+    .sort((a, b) => `${a.path}:${a.method}`.localeCompare(`${b.path}:${b.method}`));
+}
+
+function getDatabaseServiceState(database) {
+  if (!database) return "unknown";
+  if (database.status !== "ok") return "error";
+  return database.backend === "postgresql" ? "ok" : "warning";
+}
+
+function StatusPill({ state, label }) {
   return (
-    <section className={`debug-card endpoint-group ${tone}`}>
-      <div className="group-head">
-        <div>
-          <h2>{title}</h2>
-          <p>{text}</p>
-        </div>
-        <span>{endpoints.length}</span>
-      </div>
-
-      <div className="endpoint-stack">
-        {endpoints.map((endpoint) => (
-          <Endpoint
-            key={`${endpoint.method}-${endpoint.path}`}
-            method={endpoint.method}
-            path={endpoint.path}
-          />
-        ))}
-      </div>
-    </section>
+    <span className={`service-pill ${state}`}>
+      <span aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
 export default function Debug() {
   const [theme, setTheme] = useState("dark");
-  const [lang, setLang] = useState("EN");
-  const [contracts, setContracts] = useState({
-    groups: fallbackEndpointGroups,
-    source: "fallback",
-  });
+  const [lang, setLang] = useState("RU");
+  const [endpoints, setEndpoints] = useState(fallbackEndpoints);
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
+
   const t = copy[lang];
+  const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
+  const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
 
   useEffect(() => {
     let ignore = false;
 
-    async function loadOpenApiContracts() {
+    async function loadOpenApi() {
       try {
         const response = await fetch(`${API_URL}/openapi.json`);
-
-        if (!response.ok) {
-          throw new Error(`OpenAPI schema error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`OpenAPI ${response.status}`);
 
         const schema = await response.json();
-        const groups = buildGroupsFromOpenApi(schema);
+        const nextEndpoints = buildEndpointsFromOpenApi(schema);
 
-        if (!ignore && groups.length > 0) {
-          setContracts({
-            groups,
-            source: "openapi",
-          });
+        if (!ignore && nextEndpoints.length > 0) {
+          setEndpoints(nextEndpoints);
         }
       } catch {
-        if (!ignore) {
-          setContracts({
-            groups: fallbackEndpointGroups,
-            source: "fallback",
-          });
-        }
+        if (!ignore) setEndpoints(fallbackEndpoints);
       }
     }
 
-    async function loadDatabaseStatus() {
-      try {
-        const response = await fetch(`${API_URL}/api/db/check_connect`);
-        const payload = await response.json();
-
-        if (!ignore) {
-          setDatabase(payload);
-        }
-      } catch (error) {
-        if (!ignore) {
-          setDatabase({
-            status: "error",
-            error: error.message,
-          });
-        }
-      }
-    }
-
-    async function loadBackendStatus() {
+    async function loadBackend() {
       try {
         const response = await fetch(`${API_URL}/api/debug/health`);
         const payload = await response.json();
-
-        if (!ignore) {
-          setBackend(payload);
-        }
+        if (!ignore) setBackend(payload);
       } catch (error) {
-        if (!ignore) {
-          setBackend({
-            status: "error",
-            error: error.message,
-          });
-        }
+        if (!ignore) setBackend({ status: "error", error: error.message });
       }
     }
 
-    loadOpenApiContracts();
-    loadBackendStatus();
-    loadDatabaseStatus();
+    async function loadDatabase() {
+      try {
+        const response = await fetch(`${API_URL}/api/db/check_connect`);
+        const payload = await response.json();
+        if (!ignore) setDatabase(payload);
+      } catch (error) {
+        if (!ignore) setDatabase({ status: "error", error: error.message });
+      }
+    }
+
+    loadOpenApi();
+    loadBackend();
+    loadDatabase();
 
     return () => {
       ignore = true;
     };
   }, []);
 
-  const metrics = useMemo(() => {
-    const allEndpoints = contracts.groups.flatMap((group) => group.endpoints);
-    return [
-      { label: t.totalChecks, value: allEndpoints.length },
-      { label: t.httpMethods, value: new Set(allEndpoints.map((endpoint) => endpoint.method)).size },
-      { label: t.serviceChecks, value: contracts.groups.length },
-    ];
-  }, [contracts.groups, t]);
-
-  const runtimeSummary = useMemo(() => {
-    const backendItems = backend?.status === "ok"
-      ? [
-          formatStack(backend.language, backend.language_version),
-          formatStack(backend.stack, backend.stack_version),
-        ].filter(Boolean)
-      : backend?.error || t.backendLoading;
-
-    const databaseValue = database ? database.version || database.backend || t.databaseUnavailable : t.databaseLoading;
+  const serviceRows = useMemo(() => {
+    const backendOk = backend?.status === "ok";
+    const databaseState = getDatabaseServiceState(database);
 
     return [
-      { label: t.versionLabel, value: backend?.version || import.meta.env.VITE_APP_VERSION },
-      { label: t.frontendLabel, items: splitStack(import.meta.env.VITE_FRONTEND_STACK) },
       {
-        label: t.backendLabel,
-        value: Array.isArray(backendItems) ? null : backendItems || t.backendUnavailable,
-        items: Array.isArray(backendItems) ? backendItems : null,
-        state: backend?.status === "ok" ? "ok" : "error",
+        id: "frontend",
+        name: t.frontend,
+        state: "ok",
+        stack: splitStack(import.meta.env.VITE_FRONTEND_STACK),
       },
       {
-        label: t.databaseLabel,
-        items: [databaseValue],
-        state: database?.status === "ok" ? "ok" : "error",
+        id: "backend",
+        name: t.backend,
+        state: backendOk ? "ok" : "error",
+        stack: backendOk
+          ? [
+              formatStack(backend.language, backend.language_version),
+              formatStack(backend.stack, backend.stack_version),
+            ].filter(Boolean)
+          : [backend?.error || t.unavailable],
+      },
+      {
+        id: "database",
+        name: t.database,
+        state: databaseState,
+        stack: [database?.version || database?.backend || t.checking],
       },
     ];
   }, [backend, database, t]);
-
-  const runtimeEnvironment = backend?.environment || import.meta.env.MODE;
-  const runtimeState = backend?.status === "ok" && database?.status === "ok" ? "ok" : "error";
-
-  const initials = useMemo(
-    () => t.brand.split("_").map((part) => part[0]).join(""),
-    [t.brand],
-  );
 
   return (
     <div className={`debug-page ${theme}`}>
       <header className="debug-topbar">
         <a className="debug-brand" href="/">
-          <span className="debug-brand-mark">{initials}</span>
-          <span>{t.brand}</span>
+          <span className="debug-brand-mark">{getInitials(projectName)}</span>
+          <span>{projectName}</span>
         </a>
 
         <div className="debug-actions">
@@ -352,84 +263,82 @@ export default function Debug() {
       </header>
 
       <main className="debug-layout">
-        <section className="debug-hero">
-          <div className="hero-copy">
-            <p className="debug-eyebrow">{t.eyebrow}</p>
-            <h1>{t.title}</h1>
-            <p>{t.description}</p>
+        <section className="service-hero">
+          <div>
+            <p className="debug-eyebrow">{t.pageName}</p>
+            <h1>{t.pageTitle}</h1>
+            <p>{t.pageSubtitle}</p>
           </div>
 
-          <aside className="openapi-card" aria-label="Runtime summary">
-            <div className="openapi-card-head">
-              <span>RUNTIME</span>
-              <div className="runtime-head-actions">
-                <strong className={`runtime-env ${runtimeState}`}>
-                  <span className="runtime-dot" aria-hidden="true" />
-                  <span>{runtimeEnvironment}</span>
-                </strong>
-                <a className="runtime-log-link" href={LOG_DOWNLOAD_URL} download>
-                  {t.downloadLog}
-                </a>
+          <div className="status-panel">
+            <div className="status-panel-head">
+              <span>{t.projectState}</span>
+              <StatusPill state={env.state} label={env.label} />
+            </div>
+            <div className="status-version">
+              <span>{t.buildVersion}</span>
+              <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
+            </div>
+            <a
+              className="runtime-log-link"
+              href={LOG_DOWNLOAD_URL}
+              download
+              title={t.downloadLog}
+              aria-label={t.downloadLog}
+            >
+              <span className="log-download-icon" aria-hidden="true" />
+              <span>{t.downloadLog}</span>
+            </a>
+          </div>
+        </section>
+
+        <section className="services-section" aria-label={t.services}>
+          <div className="section-head">
+            <h2>{t.services}</h2>
+            <span>{serviceRows.length}</span>
+          </div>
+
+          <div className="service-table">
+            <div className="service-table-head">
+              <span>{t.serviceColumn}</span>
+              <span>{t.stack}</span>
+            </div>
+
+            {serviceRows.map((service) => (
+              <div className="service-row" key={service.id}>
+                <StatusPill state={service.state} label={service.name} />
+                <ul>
+                  {service.stack.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </div>
-            </div>
-            <dl>
-              {runtimeSummary.map((item) => (
-                <div
-                  className={item.state ? `runtime-row ${item.state}` : "runtime-row"}
-                  key={item.label}
-                >
-                  <dt>{item.label}</dt>
-                  <dd className="runtime-status">
-                    {item.state && <span className="runtime-dot" aria-hidden="true" />}
-                  </dd>
-                  <dd>
-                    {item.items ? (
-                      <ul className="runtime-stack-list">
-                        {item.items.map((stackItem) => (
-                          <li key={stackItem}>{stackItem}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      item.value
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </aside>
+            ))}
+          </div>
         </section>
 
-        <section className="metric-grid" aria-label="Diagnostics summary">
-          {metrics.map((metric) => (
-            <div className="metric-card" key={metric.label}>
-              <span>{metric.value}</span>
-              <p>{metric.label}</p>
-            </div>
-          ))}
+        <section className="api-section" aria-label={t.apiSurface}>
+          <div className="section-head">
+            <h2>{t.apiSurface}</h2>
+            <span>{endpoints.length}</span>
+          </div>
+
+          <div className="endpoint-stack">
+            {endpoints.map((endpoint) => (
+              <Endpoint
+                key={`${endpoint.method}-${endpoint.path}`}
+                method={endpoint.method}
+                path={endpoint.path}
+              />
+            ))}
+          </div>
         </section>
-
-        <div className="hint-bar">
-          <span className="status-dot" aria-hidden="true" />
-          <span>
-            {contracts.source === "openapi" ? t.schemaLoaded : t.schemaFallback} {t.runHint}
-          </span>
-        </div>
-
-        {contracts.groups.map((group) => (
-          <EndpointGroup
-            key={group.id}
-            title={formatGroupName(group.id)}
-            text={contracts.source === "openapi" ? t.contractText : t.fallbackText}
-            tone={group.tone}
-            endpoints={group.endpoints}
-          />
-        ))}
       </main>
 
       <footer className="debug-footer">
         <div className="footer-status">
-          <span className="status-dot" aria-hidden="true" />
-          <span>{t.footerStatus}</span>
+          <span className={`status-dot ${env.state}`} aria-hidden="true" />
+          <span>{env.label}</span>
         </div>
 
         <nav className="footer-links" aria-label="Footer">

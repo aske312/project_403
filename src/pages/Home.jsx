@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "../styles/home.css";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const copy = {
   RU: {
@@ -79,14 +81,39 @@ export default function Home() {
   const [lang, setLang] = useState("RU");
   const [mode, setMode] = useState("login");
   const [status, setStatus] = useState("");
+  const [projectName, setProjectName] = useState(import.meta.env.VITE_APP_NAME);
 
   const t = copy[lang];
   const isRegister = mode === "register";
 
   const initials = useMemo(
-    () => t.brand.split("_").map((part) => part[0]).join(""),
-    [t.brand],
+    () => projectName.split("_").map((part) => part[0]).join(""),
+    [projectName],
   );
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadProjectName() {
+      try {
+        const response = await fetch(`${API_URL}/api/debug/health`);
+        const payload = await response.json();
+        if (!ignore && payload.app) {
+          setProjectName(payload.app);
+        }
+      } catch {
+        if (!ignore) {
+          setProjectName(import.meta.env.VITE_APP_NAME);
+        }
+      }
+    }
+
+    loadProjectName();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -98,7 +125,7 @@ export default function Home() {
       <header className="auth-header">
         <div className="brand">
           <span className="brand-mark">{initials}</span>
-          <span>{t.brand}</span>
+          <span>{projectName}</span>
         </div>
 
         <div className="header-actions">
@@ -127,7 +154,7 @@ export default function Home() {
         <section className="intro-panel" aria-label={t.product}>
           <div>
             <p className="eyebrow">{t.product}</p>
-            <h1>{t.brand}</h1>
+            <h1>{projectName}</h1>
             <p className="lead">{t.subtitle}</p>
           </div>
 
