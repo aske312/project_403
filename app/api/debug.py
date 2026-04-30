@@ -17,14 +17,14 @@ def check_post():
     }
 
 @router.put("/api/debug/check")
-def check_post():
+def check_put():
     return {
         "status": "OK",
         "message": "PUT is ok"
     }
 
 @router.patch("/api/debug/check")
-def check_post():
+def check_patch():
     return {
         "status": "OK",
         "message": "PATCH is ok"
@@ -32,7 +32,7 @@ def check_post():
 
 
 @router.delete("/api/debug/check")
-def check_post():
+def check_delete():
     return {
         "status": "OK",
         "message": "DELETE is ok"

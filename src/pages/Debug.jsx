@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "../styles/debug.css";
 import Endpoint from "../components/Endpoint";
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 
 const fallbackEndpointGroups = [
