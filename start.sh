@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+DEFAULT_REPO_URL="https://github.com/aske312/project_403.git"
+
+REPO_URL="$DEFAULT_REPO_URL"
+PROJECT_DIR=""
 UPDATE_REPO=0
+SKIP_SYSTEM_DEPS=0
 SKIP_INSTALL=0
 SKIP_BUILD=0
 INSTALL_ONLY=0
@@ -15,8 +20,20 @@ FRONTEND_PORT="5173"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --repo-url)
+            REPO_URL="$2"
+            shift 2
+            ;;
+        --project-dir)
+            PROJECT_DIR="$2"
+            shift 2
+            ;;
         --update-repo)
             UPDATE_REPO=1
+            shift
+            ;;
+        --skip-system-deps)
+            SKIP_SYSTEM_DEPS=1
             shift
             ;;
         --skip-install)
@@ -60,7 +77,27 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: ./start.sh [--update-repo] [--skip-install] [--skip-build] [--install-only] [--build-only] [--force-install] [--force-build] [--backend-host HOST] [--backend-port PORT] [--frontend-host HOST] [--frontend-port PORT]"
+            cat <<'HELP'
+Usage: ./start.sh [options]
+
+Bootstrap options:
+  --repo-url URL          Repository URL to clone when script is outside the project.
+  --project-dir DIR       Target directory for clone. Default: project_403.
+  --update-repo           Run git pull --ff-only before installing/running.
+  --skip-system-deps      Do not install missing system packages.
+
+Project options:
+  --skip-install          Skip Python/npm dependency installation.
+  --skip-build            Skip frontend dist freshness check.
+  --install-only          Prepare environment and exit.
+  --build-only            Prepare/check frontend build and exit.
+  --force-install         Reinstall npm dependencies.
+  --force-build           Run npm run build unconditionally.
+  --backend-host HOST     Backend host. Default: 127.0.0.1.
+  --backend-port PORT     Backend port. Default: 8000.
+  --frontend-host HOST    Frontend host. Default: 127.0.0.1.
+  --frontend-port PORT    Frontend port. Default: 5173.
+HELP
             exit 0
             ;;
         *)
@@ -70,18 +107,126 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 step() {
     printf '\n==> %s\n' "$1"
 }
 
+has_command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 need_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
+    if ! has_command "$1"; then
         echo "$1 is not installed or is not available in PATH." >&2
         exit 1
     fi
+}
+
+sudo_cmd() {
+    if [[ "$(id -u)" -eq 0 ]]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+install_system_deps() {
+    if [[ "$SKIP_SYSTEM_DEPS" -eq 1 ]]; then
+        return
+    fi
+
+    local missing=()
+    has_command git || missing+=("git")
+    has_command python3 || missing+=("python3")
+    has_command curl || missing+=("curl")
+
+    if [[ "${#missing[@]}" -eq 0 ]]; then
+        true
+    else
+        if ! has_command apt-get; then
+            echo "Missing commands: ${missing[*]}." >&2
+            echo "Automatic system package installation is supported only on apt-based Linux distributions." >&2
+            exit 1
+        fi
+
+        step "Installing system dependencies"
+        sudo_cmd apt-get update
+        sudo_cmd apt-get install -y git python3 python3-venv python3-pip curl ca-certificates
+    fi
+
+    local node_major=0
+    if has_command node; then
+        node_major="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
+    fi
+
+    if ! has_command npm || [[ "$node_major" -lt 20 ]]; then
+        if ! has_command apt-get; then
+            echo "Node.js 20+ and npm are required." >&2
+            exit 1
+        fi
+
+        step "Installing Node.js 20 LTS"
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo_cmd bash -
+        sudo_cmd apt-get install -y nodejs
+    fi
+}
+
+repo_dir_name() {
+    local name
+    name="$(basename "$REPO_URL")"
+    name="${name%.git}"
+    printf '%s\n' "${name:-project_403}"
+}
+
+enter_or_clone_project() {
+    if [[ -f "package.json" && -d "app" && -d "src" ]]; then
+        return
+    fi
+
+    need_command git
+
+    local target="${PROJECT_DIR:-$(repo_dir_name)}"
+    if [[ ! -d "$target/.git" ]]; then
+        step "Cloning repository"
+        git clone "$REPO_URL" "$target"
+    fi
+
+    cd "$target"
+}
+
+ensure_env_file() {
+    if [[ -f ".env" ]]; then
+        return
+    fi
+
+    step "Creating default .env"
+    cat > .env <<EOF
+# APPLICATION
+APP_NAME=MessengerAPI
+ENV=development
+DEBUG=True
+
+# SERVER
+HOST=0.0.0.0
+PORT=$BACKEND_PORT
+
+# DATABASE
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+
+# AUTH
+JWT_SECRET=change_me_before_public_deploy
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# BUILD
+BUILD_ID=dev
+
+# UI_API
+VITE_API_URL=http://$BACKEND_HOST:$BACKEND_PORT
+EOF
 }
 
 build_outdated() {
@@ -103,15 +248,12 @@ build_outdated() {
     return 1
 }
 
-if [[ ! -f ".env" ]]; then
-    echo "Warning: .env was not found. Backend will use defaults where available; database and auth settings may be missing." >&2
-fi
+install_system_deps
+enter_or_clone_project
 
 if [[ "$UPDATE_REPO" -eq 1 ]]; then
-    need_command git
-
     if [[ ! -d ".git" ]]; then
-        echo "This directory is not a git repository. Clone the repository first." >&2
+        echo "This directory is not a git repository." >&2
         exit 1
     fi
 
@@ -119,17 +261,12 @@ if [[ "$UPDATE_REPO" -eq 1 ]]; then
     git pull --ff-only
 fi
 
+ensure_env_file
+
 if [[ "$SKIP_INSTALL" -eq 0 ]]; then
     if [[ ! -x ".venv/bin/python" ]]; then
         step "Creating Python virtual environment"
-        if command -v python3 >/dev/null 2>&1; then
-            python3 -m venv .venv
-        elif command -v python >/dev/null 2>&1; then
-            python -m venv .venv
-        else
-            echo "Python 3 is not installed or is not available in PATH." >&2
-            exit 1
-        fi
+        python3 -m venv .venv
     fi
 
     step "Installing Python dependencies"

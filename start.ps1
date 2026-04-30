@@ -1,5 +1,8 @@
 param(
+    [string]$RepoUrl = "https://github.com/aske312/project_403.git",
+    [string]$ProjectDir = "",
     [switch]$UpdateRepo,
+    [switch]$SkipSystemDeps,
     [switch]$SkipInstall,
     [switch]$SkipBuild,
     [switch]$InstallOnly,
@@ -25,6 +28,60 @@ function Test-Command {
     $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Install-WingetPackage {
+    param(
+        [string]$CommandName,
+        [string]$PackageId
+    )
+
+    if (Test-Command $CommandName) {
+        return
+    }
+
+    if (-not (Test-Command "winget")) {
+        throw "$CommandName is not installed. Install it manually or install winget, then run this script again."
+    }
+
+    Write-Step "Installing $CommandName"
+    Invoke-Checked "winget" @("install", "--id", $PackageId, "-e", "--accept-package-agreements", "--accept-source-agreements")
+}
+
+function Install-SystemDependencies {
+    if ($SkipSystemDeps) {
+        return
+    }
+
+    if ($IsWin) {
+        Install-WingetPackage "git" "Git.Git"
+        Install-WingetPackage "python" "Python.Python.3.13"
+        Install-WingetPackage "npm" "OpenJS.NodeJS.LTS"
+        return
+    }
+
+    if (-not (Test-Command "apt-get")) {
+        return
+    }
+
+    $missing = @()
+    if (-not (Test-Command "git")) { $missing += "git" }
+    if (-not (Test-Command "python3")) { $missing += "python3" }
+    if (-not (Test-Command "npm")) { $missing += "npm" }
+
+    if ($missing.Count -eq 0) {
+        return
+    }
+
+    Write-Step "Installing system dependencies"
+    $sudo = if ((id -u) -eq "0") { "" } else { "sudo" }
+    if ($sudo) {
+        Invoke-Checked $sudo @("apt-get", "update")
+        Invoke-Checked $sudo @("apt-get", "install", "-y", "git", "python3", "python3-venv", "python3-pip", "nodejs", "npm")
+    } else {
+        Invoke-Checked "apt-get" @("update")
+        Invoke-Checked "apt-get" @("install", "-y", "git", "python3", "python3-venv", "python3-pip", "nodejs", "npm")
+    }
+}
+
 function Get-BasePython {
     if ($IsWin -and (Test-Command "py")) {
         return @{ File = "py"; Args = @("-3") }
@@ -39,6 +96,74 @@ function Get-BasePython {
     }
 
     throw "Python 3 is not installed or is not available in PATH."
+}
+
+function Get-RepoDirName {
+    $name = Split-Path $RepoUrl -Leaf
+    if ($name.EndsWith(".git")) {
+        $name = $name.Substring(0, $name.Length - 4)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        return "project_403"
+    }
+
+    return $name
+}
+
+function Enter-OrCloneProject {
+    if ((Test-Path "package.json") -and (Test-Path "app") -and (Test-Path "src")) {
+        return
+    }
+
+    if (-not (Test-Command "git")) {
+        throw "Git is not installed or is not available in PATH."
+    }
+
+    $target = if ([string]::IsNullOrWhiteSpace($ProjectDir)) { Get-RepoDirName } else { $ProjectDir }
+    $targetGit = Join-Path $target ".git"
+
+    if (-not (Test-Path $targetGit)) {
+        Write-Step "Cloning repository"
+        Invoke-Checked "git" @("clone", $RepoUrl, $target)
+    }
+
+    Set-Location $target
+    $script:Root = (Get-Location).Path
+}
+
+function Ensure-EnvFile {
+    if (Test-Path ".env") {
+        return
+    }
+
+    Write-Step "Creating default .env"
+    $apiUrl = "http://$BackendHost`:$BackendPort"
+    $envContent = @"
+# APPLICATION
+APP_NAME=MessengerAPI
+ENV=development
+DEBUG=True
+
+# SERVER
+HOST=0.0.0.0
+PORT=$BackendPort
+
+# DATABASE
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
+
+# AUTH
+JWT_SECRET=change_me_before_public_deploy
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# BUILD
+BUILD_ID=dev
+
+# UI_API
+VITE_API_URL=$apiUrl
+"@
+    Set-Content -Path ".env" -Value $envContent -Encoding UTF8
 }
 
 function Invoke-Checked {
@@ -101,6 +226,9 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 $IsWin = ($env:OS -eq "Windows_NT") -or ($PSVersionTable.Platform -eq "Win32NT")
+Install-SystemDependencies
+Enter-OrCloneProject
+
 $VenvPython = if ($IsWin) {
     Join-Path $Root ".venv\Scripts\python.exe"
 } else {
@@ -121,9 +249,7 @@ if ($UpdateRepo) {
     Invoke-Checked "git" @("pull", "--ff-only")
 }
 
-if (-not (Test-Path ".env")) {
-    Write-Warning ".env was not found. Backend will use defaults where available; database and auth settings may be missing."
-}
+Ensure-EnvFile
 
 if (-not $SkipInstall) {
     if (-not (Test-Path $VenvPython)) {

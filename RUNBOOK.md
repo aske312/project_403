@@ -1,46 +1,101 @@
 # Project Runbook
 
-Короткая памятка по первому запуску, обновлению и локальной разработке.
+Памятка по bootstrap-запуску проекта на новом сервере и по обычному локальному запуску.
 
-## Требования
+## Что теперь умеют стартовые скрипты
 
-- Git
-- Node.js и npm
-- Python 3
-- Windows PowerShell или bash на Linux/Ubuntu
-- PostgreSQL нужен только для эндпоинтов, которые ходят в БД
+`start.sh` и `start.ps1` можно запускать двумя способами:
 
-## Первый запуск: Windows
+- внутри уже склонированного проекта;
+- как отдельный файл на новой машине: скрипт сам поставит доступные системные зависимости, склонирует репозиторий и подготовит проект.
 
-```powershell
-git clone <REPOSITORY_URL>
-cd project_403
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+Репозиторий по умолчанию:
+
+```text
+https://github.com/aske312/project_403.git
 ```
 
-Скрипт создаст `.venv`, установит Python-зависимости, установит npm-зависимости, проверит актуальность `dist` и запустит backend/frontend.
+## Новый Ubuntu/Linux сервер
 
-## Первый запуск: Ubuntu/Linux
+Минимальный сценарий:
 
 ```bash
-git clone <REPOSITORY_URL>
-cd project_403
 chmod +x ./start.sh
 ./start.sh
 ```
 
-Если в Ubuntu нет пакета для виртуальных окружений:
+Скрипт выполнит:
+
+- установку системных пакетов через `apt-get`: `git`, `python3`, `python3-venv`, `python3-pip`, `curl`, `ca-certificates`;
+- установку Node.js 20 LTS через NodeSource, если Node/npm отсутствуют или Node ниже 20;
+- `git clone https://github.com/aske312/project_403.git project_403`, если проект еще не рядом со скриптом;
+- создание dev `.env`, если файла нет;
+- создание `.venv`;
+- установку Python-зависимостей из `requirements.txt`;
+- установку frontend-зависимостей через `npm ci`;
+- проверку актуальности `dist` и `npm run build` при необходимости;
+- запуск backend и frontend.
+
+Если нужен другой репозиторий или каталог:
 
 ```bash
-sudo apt update
-sudo apt install python3-venv
+./start.sh --repo-url https://github.com/user/repo.git --project-dir my-app
+```
+
+Если системные пакеты уже поставлены и их не надо трогать:
+
+```bash
+./start.sh --skip-system-deps
+```
+
+Для автоматической установки системных пакетов на Ubuntu/Linux нужны интернет и права `sudo`.
+
+## Новый Windows сервер
+
+Минимальный сценарий из PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+Скрипт проверит и при необходимости попробует установить через `winget`:
+
+- Git;
+- Python;
+- Node.js/npm.
+
+Затем он склонирует репозиторий, подготовит `.venv`, поставит Python/npm-зависимости, проверит frontend-сборку и запустит backend/frontend.
+Если `.env` отсутствует, скрипт создаст dev-вариант с локальным `DATABASE_URL`.
+
+Если нужен другой репозиторий или каталог:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -RepoUrl https://github.com/user/repo.git -ProjectDir my-app
+```
+
+Если системные зависимости уже установлены:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -SkipSystemDeps
+```
+
+Примечание: после установки Git/Python/Node через `winget` Windows иногда требует открыть новую сессию PowerShell, чтобы обновился `PATH`.
+
+## Уже склонированный проект
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+Ubuntu/Linux:
+
+```bash
+./start.sh
 ```
 
 ## Обновление репозитория перед запуском
-
-Первичное клонирование нельзя выполнить из `start.ps1` или `start.sh`, потому что этих файлов еще нет на машине до `git clone`.
-
-Для уже склонированного проекта можно обновиться перед запуском:
 
 Windows:
 
@@ -54,7 +109,7 @@ Ubuntu/Linux:
 ./start.sh --update-repo
 ```
 
-Оба варианта выполняют `git pull --ff-only`. Если есть локальные изменения или нужна merge/rebase-логика, обновление надо сделать вручную.
+Оба варианта выполняют `git pull --ff-only`. Если есть локальные изменения или нужен merge/rebase, обновление надо сделать вручную.
 
 ## Частые режимы
 
@@ -119,3 +174,5 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -BackendPort 18000 -Fronten
 Запуск PostgreSQL пока не включен. В `start.ps1` и `start.sh` есть закомментированная заготовка для Docker и Docker Compose.
 
 Пока БД не запущена, `/api/debug/check` должен работать, а `/api/db/check_connect` ожидаемо вернет ошибку подключения.
+
+Создаваемый скриптом `.env` подходит для локального/dev-запуска. Перед публичным deploy надо заменить `JWT_SECRET`, `DATABASE_URL` и другие значения окружения на реальные.
