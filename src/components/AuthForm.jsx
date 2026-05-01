@@ -1,13 +1,24 @@
+import { useState } from "react";
+
 function sanitizePersonName(value) {
   return value.replace(/[^A-Za-z\u0400-\u04FF-]/g, "").slice(0, 40);
 }
 
 export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const isRegister = mode === "register";
+  const passwordToggleLabel = passwordVisible ? t.hidePassword : t.showPassword;
 
   return (
-    <section className="auth-card">
-      <div className="mode-tabs" role="tablist" aria-label="Auth mode">
+    <section className="auth-card" aria-labelledby="auth-form-title">
+      <div className="auth-card-top">
+        <div>
+          <p className="auth-kicker">{isRegister ? t.register : t.login}</p>
+          <h2 id="auth-form-title">{isRegister ? t.titleRegister : t.titleLogin}</h2>
+        </div>
+      </div>
+
+      <div className="mode-tabs" role="tablist" aria-label={t.authMode}>
         <button
           className={mode === "login" ? "active" : ""}
           type="button"
@@ -24,20 +35,15 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
         </button>
       </div>
 
-      <div className="form-heading">
-        <h2>{isRegister ? t.titleRegister : t.titleLogin}</h2>
-        <p>{isRegister ? t.formHintRegister : t.formHintLogin}</p>
-      </div>
-
       <form className="auth-form" onSubmit={onSubmit}>
         {isRegister && (
-          <>
-            <label>
+          <div className="field-grid">
+            <label className="auth-field">
               <span>{t.firstName}</span>
               <input
                 name="first_name"
                 type="text"
-                placeholder="Ivan"
+                placeholder={t.firstNamePlaceholder}
                 autoComplete="given-name"
                 minLength={1}
                 maxLength={40}
@@ -48,17 +54,16 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
                 }}
                 required
               />
-              <small>{t.firstNameExample}</small>
             </label>
 
-            <label>
-              <span>
-                {t.lastName} <small>{t.optional}</small>
+            <label className="auth-field">
+              <span className="field-label">
+                {t.lastName} <span className="field-optional">{t.optional}</span>
               </span>
               <input
                 name="last_name"
                 type="text"
-                placeholder="Petrov"
+                placeholder={t.lastNamePlaceholder}
                 autoComplete="family-name"
                 maxLength={40}
                 pattern="[A-Za-z\u0400-\u04FF-]{0,40}"
@@ -67,76 +72,75 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
                   event.currentTarget.value = sanitizePersonName(event.currentTarget.value);
                 }}
               />
-              <small>{t.lastNameExample}</small>
             </label>
-          </>
+          </div>
         )}
 
         {isRegister ? (
-          <label>
+          <label className="auth-field">
             <span>{t.email}</span>
             <input
               name="email"
               type="email"
-              placeholder="user@example.com"
+              placeholder={t.emailPlaceholder}
               autoComplete="email"
               minLength={3}
               maxLength={255}
               required
             />
-            <small>{t.emailExample}</small>
           </label>
         ) : (
-          <label>
-            <span>{t.loginField}</span>
+          <label className="auth-field">
+            <span>{t.loginIdentifier}</span>
             <input
               name="login"
               type="text"
-              placeholder="@ivan_petrov_94cf34"
+              placeholder={t.loginPlaceholder}
               autoComplete="username"
               minLength={3}
               maxLength={255}
               title={t.loginHint}
               required
             />
-            <small>{t.loginExample}</small>
           </label>
         )}
 
-        <label>
+        <label className="auth-field">
           <span>{t.password}</span>
-          <input
-            name="password"
-            type="password"
-            placeholder="secret123"
-            autoComplete={isRegister ? "new-password" : "current-password"}
-            minLength={8}
-            maxLength={128}
-            pattern="(?=.*[A-Za-z\u0400-\u04FF])(?=.*\d).{8,128}"
-            title={t.passwordHint}
-            required
-          />
-          <small>{t.passwordExample}</small>
-        </label>
-
-        {!isRegister && (
-          <div className="form-row">
-            <label className="checkbox">
-              <input type="checkbox" />
-              <span>{t.remember}</span>
-            </label>
-            <button className="link-btn" type="button">
-              {t.forgot}
+          <span className="password-control">
+            <input
+              name="password"
+              type={passwordVisible ? "text" : "password"}
+              placeholder={t.passwordPlaceholder}
+              autoComplete={isRegister ? "new-password" : "current-password"}
+              minLength={8}
+              maxLength={128}
+              pattern="(?=.*[A-Za-z\u0400-\u04FF])(?=.*\d).{8,128}"
+              title={t.passwordHint}
+              required
+            />
+            <button
+              className="field-icon-button"
+              type="button"
+              onClick={() => setPasswordVisible((value) => !value)}
+              aria-label={passwordToggleLabel}
+              title={passwordToggleLabel}
+            >
+              <span className={passwordVisible ? "eye-icon visible" : "eye-icon"} aria-hidden="true" />
             </button>
-          </div>
-        )}
+          </span>
+        </label>
 
         <button className="primary-btn" type="submit">
           {isRegister ? t.submitRegister : t.submitLogin}
         </button>
       </form>
 
-      {status && <div className="status-note">{status}</div>}
+      {status && (
+        <div className="status-note" role="alert">
+          {status}
+        </div>
+      )}
       <p className="switch-note">
         {isRegister ? t.hintRegister : t.hintLogin}{" "}
         <button

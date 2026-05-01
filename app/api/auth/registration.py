@@ -3,13 +3,15 @@ import re
 import secrets
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
+from app.setting.config import parameters as param
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -118,8 +120,20 @@ async def generate_user_handle(db: AsyncSession, name, email):
 
 
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_session)):
+async def register(
+    payload: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+):
     email = payload.email
+    rate_limit_key = make_rate_limit_key("register", request, email)
+    enforce_rate_limit(
+        rate_limit_key,
+        limit=param.AUTH_REGISTER_RATE_LIMIT_ATTEMPTS,
+        window_seconds=param.AUTH_RATE_LIMIT_WINDOW_SECONDS,
+        detail="Too many registration attempts. Try again later.",
+    )
+
     existing_user = await db.scalar(select(User).where(User.email == email))
 
     if existing_user:
@@ -142,5 +156,6 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_sess
     await db.commit()
     await db.refresh(user)
 
+    reset_rate_limit(rate_limit_key)
     logger.info("User registered: id=%s email=%s handle=%s", user.id, user.email, user.handle)
     return make_user_response(user)

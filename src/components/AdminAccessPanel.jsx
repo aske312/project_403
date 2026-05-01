@@ -1,4 +1,4 @@
-import StatusPill from "./StatusPill";
+import AdminStatusPanel from "./AdminStatusPanel";
 
 export default function AdminAccessPanel({ t, env, backend }) {
   return (
@@ -10,16 +10,7 @@ export default function AdminAccessPanel({ t, env, backend }) {
           <p>{t.accessCheckingText}</p>
         </div>
 
-        <div className="status-panel">
-          <div className="status-panel-head">
-            <span>{t.projectState}</span>
-            <StatusPill state={env.state} label={env.label} />
-          </div>
-          <div className="status-version">
-            <span>{t.buildVersion}</span>
-            <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
-          </div>
-        </div>
+        <AdminStatusPanel t={t} env={env} backend={backend} />
       </section>
     </main>
   );

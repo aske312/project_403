@@ -9,6 +9,35 @@ import { homeCopy } from "../utils/homeCopy";
 import { setAccessToken, useAuthSession } from "../utils/useAuthSession";
 import "../styles/home.css";
 
+function getValidationMessages(detail) {
+  if (!Array.isArray(detail)) return [];
+
+  return detail
+    .map((item) => item?.msg || item?.message || item)
+    .filter(Boolean)
+    .map(String);
+}
+
+function getAuthErrorMessage(payload, fallback, t) {
+  const detail = payload?.detail;
+  const validationMessages = getValidationMessages(detail);
+
+  if (validationMessages.length > 0) {
+    return validationMessages.join(" ");
+  }
+
+  const message = String(detail || payload?.message || fallback || t.requestFailed);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("too many login attempts")) return t.tooManyLoginAttempts;
+  if (normalized.includes("too many registration attempts")) return t.tooManyRegisterAttempts;
+  if (normalized.includes("invalid login or password")) return t.invalidLoginOrPassword;
+  if (normalized.includes("user with this email already exists")) return t.emailAlreadyExists;
+  if (normalized.includes("login is required")) return t.loginRequired;
+
+  return message;
+}
+
 export default function Home() {
   const [theme, setTheme] = useState("dark");
   const [lang, setLang] = useState("RU");
@@ -19,6 +48,8 @@ export default function Home() {
   const {
     profile,
     setProfile,
+    sessionExpired,
+    setSessionExpired,
     accountOpen,
     setAccountOpen,
     logout,
@@ -28,6 +59,13 @@ export default function Home() {
   const isRegister = mode === "register";
   const env = normalizeEnvironment(projectEnvironment);
   const showAdminLink = canUseAdminPanel(profile, env);
+  const visibleStatus = status || (sessionExpired ? t.sessionExpired : "");
+
+  const handleModeChange = (nextMode) => {
+    setMode(nextMode);
+    setStatus("");
+    setSessionExpired(false);
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -61,6 +99,9 @@ export default function Home() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setStatus("");
+    setSessionExpired(false);
+
     const formData = new FormData(event.currentTarget);
     const requestPayload = {
       [isRegister ? "email" : "login"]: String(formData.get(isRegister ? "email" : "login") || ""),
@@ -78,7 +119,7 @@ export default function Home() {
         : login(requestPayload));
 
       if (!response.ok) {
-        setStatus(result.detail || "Request failed");
+        setStatus(getAuthErrorMessage(result, t.requestFailed, t));
         return;
       }
 
@@ -91,12 +132,13 @@ export default function Home() {
         if (!loginResponse.ok) {
           setProfile(null);
           setAccountOpen(false);
-          setStatus(loginResult.detail || "Login after registration failed");
+          setStatus(getAuthErrorMessage(loginResult, t.loginAfterRegistrationFailed, t));
           return;
         }
 
         setAccessToken(loginResult.access_token);
         setProfile(loginResult.user);
+        setSessionExpired(false);
         setStatus("");
         setMode("login");
         return;
@@ -104,6 +146,7 @@ export default function Home() {
 
       setAccessToken(result.access_token);
       setProfile(result.user);
+      setSessionExpired(false);
       setStatus("");
     } catch (error) {
       setStatus(error.message);
@@ -133,8 +176,8 @@ export default function Home() {
         <AuthForm
           t={t}
           mode={mode}
-          status={status}
-          onModeChange={setMode}
+          status={visibleStatus}
+          onModeChange={handleModeChange}
           onSubmit={handleSubmit}
         />
       </main>

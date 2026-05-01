@@ -1,5 +1,43 @@
 export const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const inFlightJsonRequests = new Map();
+
+function normalizeHeaders(headers) {
+  if (!headers) return "";
+
+  if (headers instanceof Headers) {
+    return [...headers.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}:${value}`)
+      .join("|");
+  }
+
+  if (Array.isArray(headers)) {
+    return [...headers]
+      .sort(([left], [right]) => String(left).localeCompare(String(right)))
+      .map(([key, value]) => `${key}:${value}`)
+      .join("|");
+  }
+
+  return Object.entries(headers)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}:${value}`)
+    .join("|");
+}
+
+function getRequestMethod(options) {
+  return String(options?.method || "GET").toUpperCase();
+}
+
+function getRequestKey(url, options) {
+  return [
+    getRequestMethod(options),
+    url,
+    normalizeHeaders(options?.headers),
+    options?.body || "",
+  ].join(" ");
+}
+
 async function requestJsonFromUrl(url, options) {
   const startedAt = performance.now();
   const response = await fetch(url, options);
@@ -9,12 +47,28 @@ async function requestJsonFromUrl(url, options) {
   return { response, payload, durationMs };
 }
 
+function requestJsonDeduped(url, options) {
+  if (getRequestMethod(options) !== "GET") {
+    return requestJsonFromUrl(url, options);
+  }
+
+  const key = getRequestKey(url, options);
+  const existingRequest = inFlightJsonRequests.get(key);
+  if (existingRequest) return existingRequest;
+
+  const request = requestJsonFromUrl(url, options).finally(() => {
+    inFlightJsonRequests.delete(key);
+  });
+  inFlightJsonRequests.set(key, request);
+  return request;
+}
+
 async function requestJson(path, options) {
-  return requestJsonFromUrl(`${API_URL}${path}`, options);
+  return requestJsonDeduped(`${API_URL}${path}`, options);
 }
 
 async function requestLocalJson(path, options) {
-  return requestJsonFromUrl(path, options);
+  return requestJsonDeduped(path, options);
 }
 
 export function getFrontendMetrics() {
@@ -66,6 +120,20 @@ export function checkDatabase() {
   return requestJson("/api/db/check_connect");
 }
 
-export function getLogs() {
-  return requestJson("/api/admin/logs");
+export function getLogs(page = 1, pageSize = 10) {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  return requestJson(`/api/admin/logs?${params}`);
+}
+
+export function runAdminCommand(commandId, token) {
+  return requestJson(`/api/admin/commands/${commandId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }

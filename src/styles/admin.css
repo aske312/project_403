@@ -15,6 +15,8 @@ button {
 }
 
 .admin-page {
+  --ambient-flow-duration: 12s;
+  --ambient-flow-easing: ease-in-out;
   --bg-start: #f7f9fc;
   --bg-mid: #eef3f8;
   --bg-end: #f8faf7;
@@ -46,13 +48,45 @@ button {
   --code-bg: #0f172a;
   --code-text: #dbeafe;
 
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   color: var(--text);
   background:
-    radial-gradient(circle at 16% 10%, rgba(37, 99, 235, 0.16), transparent 30%),
+    linear-gradient(115deg, rgba(37, 99, 235, 0.12), transparent 34%),
     linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 48%, var(--bg-end) 100%);
+}
+
+.admin-page::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      118deg,
+      transparent 0%,
+      transparent 24%,
+      var(--primary-soft) 38%,
+      var(--success-soft) 50%,
+      var(--warning-soft) 62%,
+      transparent 78%,
+      transparent 100%
+    );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  opacity: 0.28;
+  animation: ambient-flow var(--ambient-flow-duration) var(--ambient-flow-easing) infinite;
+}
+
+.admin-layout,
+.access-panel,
+.app-footer {
+  position: relative;
+  z-index: 1;
 }
 
 .admin-page.dark {
@@ -98,6 +132,7 @@ button {
 .service-hero,
 .access-panel,
 .services-section,
+.commands-section,
 .api-section,
 .logs-section {
   border: 1px solid var(--border);
@@ -169,6 +204,7 @@ button {
 .status-panel-head > span,
 .status-version > span,
 .section-head > span,
+.section-head-actions > span,
 .service-table-head {
   color: var(--muted);
   font-size: 12px;
@@ -222,14 +258,17 @@ button {
 }
 
 .service-pill.warning,
+.service-pill.loading,
 .service-pill.dev {
   color: var(--warning-text);
   background: var(--warning-soft);
 }
 
 .service-pill.warning > span,
+.service-pill.loading > span,
 .service-pill.dev > span,
 .status-dot.dev,
+.status-dot.loading,
 .status-dot.warning {
   background: var(--warning);
   box-shadow: 0 0 0 5px var(--warning-soft);
@@ -261,20 +300,24 @@ button {
 }
 
 .service-pill.error,
+.service-pill.missed,
 .service-pill.close {
   color: var(--danger-text);
   background: var(--danger-soft);
 }
 
 .service-pill.error > span,
+.service-pill.missed > span,
 .service-pill.close > span,
 .status-dot.close,
+.status-dot.missed,
 .status-dot.error {
   background: var(--danger);
   box-shadow: 0 0 0 5px var(--danger-soft);
 }
 
 .services-section,
+.commands-section,
 .api-section,
 .logs-section {
   padding: 18px;
@@ -294,7 +337,14 @@ button {
   font-size: 20px;
 }
 
-.section-head > span {
+.section-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-head > span,
+.section-head-actions > span {
   min-width: 36px;
   min-height: 32px;
   display: grid;
@@ -316,7 +366,7 @@ button {
   display: grid;
   grid-template-columns: minmax(130px, 0.8fr) minmax(220px, 1.5fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr);
   gap: 14px;
-  align-items: start;
+  align-items: center;
   padding: 12px 14px;
 }
 
@@ -325,12 +375,32 @@ button {
 }
 
 .service-row {
+  position: relative;
   border-top: 1px solid var(--border);
   background: var(--surface);
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.service-row.active:hover {
+  background: var(--success-soft);
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.service-row.missed:hover {
+  background: var(--danger-soft);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.service-row.loading:hover {
+  background: var(--warning-soft);
+  box-shadow: inset 3px 0 0 var(--warning);
 }
 
 .service-row ul {
   display: grid;
+  align-content: center;
   gap: 5px;
   margin: 0;
   padding: 0;
@@ -343,6 +413,7 @@ button {
 
 .service-metric {
   min-width: 0;
+  align-self: center;
   overflow: hidden;
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -351,6 +422,69 @@ button {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.service-hover-state {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  pointer-events: none;
+  opacity: 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+  transition: opacity 0.2s ease;
+}
+
+.service-row:hover .service-hover-state {
+  opacity: 1;
+}
+
+.service-hover-state.active {
+  color: var(--success-text);
+  background: var(--success-soft);
+}
+
+.service-hover-state.missed {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.service-hover-state.loading {
+  color: var(--warning-text);
+  background: var(--warning-soft);
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--primary-text);
+  background: var(--surface-strong);
+  cursor: pointer;
+}
+
+.refresh-icon::before {
+  content: "\21bb";
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.icon-button:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 .endpoint-stack {
@@ -554,6 +688,128 @@ button {
   font-weight: 800;
 }
 
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, max-content));
+  gap: 10px;
+}
+
+.commands-toggle {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  text-align: left;
+}
+
+.commands-body {
+  margin-top: 14px;
+}
+
+.command-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-strong);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.command-button:hover:not(:disabled),
+.command-menu-list button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.command-button:disabled,
+.command-menu-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.command-menu {
+  position: relative;
+}
+
+.command-menu > summary {
+  list-style: none;
+}
+
+.command-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.command-menu > summary::after {
+  content: "\25be";
+  margin-left: 8px;
+  font-size: 11px;
+}
+
+.command-menu-list {
+  position: absolute;
+  z-index: 25;
+  top: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 100%;
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.command-menu-list button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+}
+
+.command-feedback {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.command-feedback.ok {
+  color: var(--success-text);
+  background: var(--success-soft);
+}
+
+.command-feedback.error {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
 .log-list {
   display: grid;
   overflow: hidden;
@@ -624,9 +880,56 @@ button {
   font-weight: 700;
 }
 
+.logs-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.logs-pagination-status,
+.logs-pagination-page {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.logs-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logs-pagination button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--neutral-text);
+  background: var(--surface-strong);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.logs-pagination button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.logs-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 @media (max-width: 960px) {
   .service-hero,
-  .access-panel,
+  .access-panel {
+    grid-template-columns: 1fr;
+  }
+
   .service-table-head,
   .service-row {
     grid-template-columns: 1fr;
@@ -640,8 +943,85 @@ button {
     gap: 10px;
   }
 
+  .service-hover-state {
+    position: static;
+    width: fit-content;
+    opacity: 1;
+    transform: none;
+  }
+
   .log-row {
     grid-template-columns: 1fr;
+  }
+
+  .logs-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-layout {
+    width: min(100% - 28px, 1120px);
+    padding-top: 18px;
+  }
+
+  .service-hero,
+  .access-panel,
+  .services-section,
+  .commands-section,
+  .api-section,
+  .logs-section {
+    border-radius: 12px;
+  }
+
+  .service-hero,
+  .access-panel {
+    padding: 20px;
+  }
+
+  .services-section,
+  .commands-section,
+  .api-section,
+  .logs-section {
+    padding: 16px;
+  }
+
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .section-head-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .command-menu-list {
+    position: static;
+    width: 100%;
+  }
+
+  .endpoint-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .endpoint-left,
+  .endpoint-right {
+    width: 100%;
+  }
+
+  .endpoint-right {
+    justify-content: space-between;
+  }
+
+  .url {
+    width: 100%;
   }
 }
 
@@ -650,17 +1030,48 @@ button {
     width: min(100% - 24px, 1120px);
   }
 
-  .endpoint-header {
+  .service-hero,
+  .access-panel {
+    padding: 18px;
+  }
+
+  .status-panel-head,
+  .status-version {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .endpoint-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-
   .kv-row {
     grid-template-columns: 1fr;
+  }
+
+  .logs-pagination-controls {
+    width: 100%;
+  }
+
+  .logs-pagination button {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-layout {
+    width: min(100% - 18px, 1120px);
+  }
+
+  .service-hero h1,
+  .access-panel h1 {
+    font-size: 26px;
+  }
+
+  .service-row,
+  .endpoint-content,
+  .panel,
+  .log-row {
+    padding: 12px;
+  }
+
+  .method {
+    min-width: 54px;
   }
 }

@@ -271,6 +271,9 @@ DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
 JWT_SECRET=change_me_before_public_deploy
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+AUTH_RATE_LIMIT_WINDOW_SECONDS=60
+AUTH_LOGIN_RATE_LIMIT_ATTEMPTS=5
+AUTH_REGISTER_RATE_LIMIT_ATTEMPTS=3
 
 # DEV ACCOUNTS
 DEV_SUPERUSER_ENABLED=True
@@ -295,6 +298,10 @@ LOG_DIR=logs
 LOG_FILE=logs/app.log
 LOG_MAX_BYTES=1048576
 LOG_BACKUP_COUNT=3
+
+# ADMIN
+ADMIN_COMMAND_FILE=logs/admin-command.json
+ADMIN_COMMAND_TTL_SECONDS=30
 
 # UI_API
 VITE_API_URL=http://$BACKEND_HOST:$BACKEND_PORT
@@ -412,19 +419,136 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-step "Starting backend"
-.venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" &
-BACKEND_PID=$!
+ADMIN_COMMAND_FILE="${ADMIN_COMMAND_FILE:-logs/admin-command.json}"
+ADMIN_COMMAND_ARCHIVE_DIR="logs/admin-commands"
 
-step "Starting frontend"
-npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" &
-FRONTEND_PID=$!
+start_backend() {
+    step "Starting backend"
+    .venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" &
+    BACKEND_PID=$!
+}
+
+start_frontend() {
+    step "Starting frontend"
+    npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" &
+    FRONTEND_PID=$!
+}
+
+stop_service() {
+    local pid="$1"
+    local name="$2"
+
+    if [[ -z "$pid" ]]; then
+        return
+    fi
+
+    if kill -0 "$pid" 2>/dev/null; then
+        step "Stopping $name"
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+    fi
+}
+
+read_admin_command_field() {
+    local field="$1"
+
+    [[ -f "$ADMIN_COMMAND_FILE" ]] || return 1
+    .venv/bin/python - "$ADMIN_COMMAND_FILE" "$field" <<'PY'
+import json
+import sys
+
+path, field = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as command_file:
+    payload = json.load(command_file)
+print(payload.get(field, ""))
+PY
+}
+
+admin_command_expired() {
+    [[ -f "$ADMIN_COMMAND_FILE" ]] || return 1
+    .venv/bin/python - "$ADMIN_COMMAND_FILE" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+with open(sys.argv[1], encoding="utf-8") as command_file:
+    payload = json.load(command_file)
+
+expires_at = payload.get("expires_at")
+if not expires_at:
+    raise SystemExit(1)
+
+expires_at = datetime.fromisoformat(expires_at)
+if expires_at.tzinfo is None:
+    expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+raise SystemExit(0 if expires_at < datetime.now(timezone.utc) else 1)
+PY
+}
+
+archive_admin_command() {
+    [[ -f "$ADMIN_COMMAND_FILE" ]] || return
+    mkdir -p "$ADMIN_COMMAND_ARCHIVE_DIR"
+
+    local command_id
+    command_id="$(read_admin_command_field id 2>/dev/null || true)"
+    if [[ -z "$command_id" ]]; then
+        command_id="invalid-$(date -u +%s)"
+    fi
+
+    mv -f "$ADMIN_COMMAND_FILE" "$ADMIN_COMMAND_ARCHIVE_DIR/$command_id.json"
+}
+
+handle_admin_command() {
+    [[ -f "$ADMIN_COMMAND_FILE" ]] || return
+
+    if admin_command_expired 2>/dev/null; then
+        echo "Admin command expired: $(read_admin_command_field command 2>/dev/null || true)" >&2
+        archive_admin_command
+        return
+    fi
+
+    local command
+    command="$(read_admin_command_field command 2>/dev/null || true)"
+
+    case "$command" in
+        restart_backend)
+            step "Admin command: restart backend"
+            stop_service "$BACKEND_PID" "backend"
+            start_backend
+            archive_admin_command
+            ;;
+        restart_frontend)
+            step "Admin command: restart frontend"
+            stop_service "$FRONTEND_PID" "frontend"
+            start_frontend
+            archive_admin_command
+            ;;
+        restart_project)
+            step "Admin command: restart project"
+            stop_service "$FRONTEND_PID" "frontend"
+            stop_service "$BACKEND_PID" "backend"
+            start_backend
+            start_frontend
+            archive_admin_command
+            ;;
+        *)
+            echo "Unknown admin command: $command" >&2
+            archive_admin_command
+            ;;
+    esac
+}
+
+start_backend
+start_frontend
 
 printf '\nFrontend: http://%s:%s\n' "$FRONTEND_HOST" "$FRONTEND_PORT"
 printf 'Backend:  http://%s:%s\n' "$BACKEND_HOST" "$BACKEND_PORT"
 printf 'Press Ctrl+C to stop both processes.\n'
 
 while true; do
+    handle_admin_command
+
     if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
         wait "$BACKEND_PID"
         exit $?

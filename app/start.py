@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+import asyncio
+from contextlib import suppress
 import json
 import logging
 import time
@@ -10,10 +12,12 @@ from app.api.db import router as api_db
 from app.api.admin import router as api_admin
 from app.db.session import get_public_database_url, init_db
 from app.logging_config import get_request_resource, setup_logging, write_request_log
+from app.runtime_state import mark_runtime_seen, start_runtime_session, stop_runtime_session
 from fastapi.middleware.cors import CORSMiddleware
 
 setup_logging()
 logger = logging.getLogger(__name__)
+runtime_heartbeat_task = None
 
 SENSITIVE_LOG_KEYS = {
     "access_token",
@@ -72,6 +76,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+async def runtime_heartbeat():
+    while True:
+        await asyncio.sleep(param.RUNTIME_HEARTBEAT_SECONDS)
+        mark_runtime_seen()
 
 
 @app.middleware("http")
@@ -142,6 +152,11 @@ async def log_requests(request, call_next):
 
 @app.on_event("startup")
 async def startup():
+    global runtime_heartbeat_task
+
+    start_runtime_session()
+    runtime_heartbeat_task = asyncio.create_task(runtime_heartbeat())
+
     startup_started = time.perf_counter()
 
     try:
@@ -172,3 +187,16 @@ async def startup():
     finally:
         param.STARTUP_DURATION_MS = round((time.perf_counter() - startup_started) * 1000, 1)
         logger.info("Startup completed in %.1fms", param.STARTUP_DURATION_MS)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    global runtime_heartbeat_task
+
+    if runtime_heartbeat_task is not None:
+        runtime_heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await runtime_heartbeat_task
+        runtime_heartbeat_task = None
+
+    stop_runtime_session()

@@ -1,6 +1,8 @@
 export const fallbackEndpoints = [
   { method: "GET", path: "/api/admin/health" },
   { method: "GET", path: "/api/admin/logs" },
+  { method: "GET", path: "/api/admin/commands" },
+  { method: "POST", path: "/api/admin/commands/{command_id}" },
   { method: "GET", path: "/api/admin/check" },
   { method: "POST", path: "/api/admin/check" },
   { method: "PUT", path: "/api/admin/check" },
@@ -27,9 +29,10 @@ function splitStack(value) {
 }
 
 function getDatabaseServiceState(database) {
-  if (!database) return "unknown";
-  if (database.status !== "ok") return "error";
-  return database.backend === "postgresql" ? "ok" : "warning";
+  if (!database) return "loading";
+  if (database.status === "loading") return "loading";
+  if (database.status !== "ok") return "missed";
+  return "active";
 }
 
 function formatDuration(value, fallback) {
@@ -86,14 +89,30 @@ export function buildEndpointsFromOpenApi(schema) {
 
 export function buildServiceRows(t, frontend, backend, database) {
   const backendOk = backend?.status === "ok";
+  const backendHasStack = Boolean(backend?.language || backend?.stack);
   const databaseState = getDatabaseServiceState(database);
-  const frontendState = frontend?.status === "error" ? "error" : "ok";
+  const frontendState =
+    !frontend || frontend.status === "loading"
+      ? "loading"
+      : frontend.status === "error"
+        ? "missed"
+        : "active";
+  const backendState =
+    !backend || backend.status === "loading" ? "loading" : backendOk ? "active" : "missed";
+
+  function getStatusLabel(state) {
+    if (state === "loading") return t.loading;
+    if (state === "missed") return t.missed;
+    return t.active;
+  }
 
   return [
     {
       id: "frontend",
       name: t.frontend,
       state: frontendState,
+      statusState: frontendState,
+      statusLabel: getStatusLabel(frontendState),
       stack: splitStack(import.meta.env.VITE_FRONTEND_STACK),
       latency: formatLatency(frontend?.latency_ms, frontend ? t.notMeasured : t.checking),
       startupTime: formatStartupTime(frontend?.startup_ms, frontend ? t.notMeasured : t.checking),
@@ -101,8 +120,10 @@ export function buildServiceRows(t, frontend, backend, database) {
     {
       id: "backend",
       name: t.backend,
-      state: backendOk ? "ok" : "error",
-      stack: backendOk
+      state: backendState,
+      statusState: backendState,
+      statusLabel: getStatusLabel(backendState),
+      stack: backendOk || backendHasStack
         ? [
             formatStack(backend.language, backend.language_version),
             formatStack(backend.stack, backend.stack_version),
@@ -115,6 +136,8 @@ export function buildServiceRows(t, frontend, backend, database) {
       id: "database",
       name: t.database,
       state: databaseState,
+      statusState: databaseState,
+      statusLabel: getStatusLabel(databaseState),
       stack: [database?.version || database?.backend || t.checking],
       latency: formatLatency(database?.latency_ms, t.checking),
       startupTime: formatStartupTime(

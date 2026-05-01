@@ -1,6 +1,15 @@
+import AdminStatusPanel from "./AdminStatusPanel";
 import StatusPill from "./StatusPill";
 
-export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
+export default function AdminServiceOverview({
+  t,
+  env,
+  backend,
+  serviceRows,
+  children,
+  onRefresh,
+  refreshing,
+}) {
   return (
     <>
       <section className="service-hero">
@@ -10,22 +19,25 @@ export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
           <p>{t.pageSubtitle}</p>
         </div>
 
-        <div className="status-panel">
-          <div className="status-panel-head">
-            <span>{t.projectState}</span>
-            <StatusPill state={env.state} label={env.label} />
-          </div>
-          <div className="status-version">
-            <span>{t.buildVersion}</span>
-            <strong>{backend?.version || import.meta.env.VITE_APP_VERSION}</strong>
-          </div>
-        </div>
+        <AdminStatusPanel t={t} env={env} backend={backend} />
       </section>
+
+      {children}
 
       <section className="services-section" aria-label={t.services}>
         <div className="section-head">
           <h2>{t.services}</h2>
-          <span>{serviceRows.length}</span>
+          <div className="section-head-actions">
+            <button
+              aria-label={t.refreshAllServices}
+              className="icon-button refresh-icon"
+              disabled={refreshing}
+              onClick={onRefresh}
+              title={t.refreshAllServices}
+              type="button"
+            />
+            <span>{serviceRows.length}</span>
+          </div>
         </div>
 
         <div className="service-table">
@@ -37,7 +49,12 @@ export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
           </div>
 
           {serviceRows.map((service) => (
-            <div className="service-row" key={service.id}>
+            <div
+              aria-label={`${service.name}: ${service.statusLabel}`}
+              className={`service-row ${service.statusState}`}
+              key={service.id}
+              title={service.statusLabel}
+            >
               <StatusPill state={service.state} label={service.name} />
               <ul>
                 {service.stack.map((item) => (
@@ -46,6 +63,9 @@ export default function AdminServiceOverview({ t, env, backend, serviceRows }) {
               </ul>
               <span className="service-metric">{service.latency}</span>
               <span className="service-metric">{service.startupTime}</span>
+              <span className={`service-hover-state ${service.statusState}`}>
+                {service.statusLabel}
+              </span>
             </div>
           ))}
         </div>

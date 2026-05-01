@@ -3,13 +3,14 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
 from app.setting.config import parameters as param
@@ -117,10 +118,22 @@ async def get_current_user(
 
 
 @router.post("/api/auth/login")
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_session)):
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+):
     identifier = payload.login or payload.email
     if not identifier:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Login is required.")
+
+    rate_limit_key = make_rate_limit_key("login", request, identifier)
+    enforce_rate_limit(
+        rate_limit_key,
+        limit=param.AUTH_LOGIN_RATE_LIMIT_ATTEMPTS,
+        window_seconds=param.AUTH_RATE_LIMIT_WINDOW_SECONDS,
+        detail="Too many login attempts. Try again later.",
+    )
 
     if re.fullmatch(EMAIL_RE, identifier):
         user = await db.scalar(select(User).where(User.email == identifier))
@@ -132,6 +145,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_session)):
         logger.info("Login rejected: login=%s", identifier)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login or password.")
 
+    reset_rate_limit(rate_limit_key)
     logger.info("User logged in: id=%s email=%s", user.id, user.email)
     return TokenResponse(
         access_token=create_access_token(user),

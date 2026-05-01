@@ -8,12 +8,36 @@ function formatLogTime(value) {
   return new Date(value * 1000).toLocaleString();
 }
 
-export default function AdminLogsSection({ t, logs, apiUrl }) {
+export default function AdminLogsSection({
+  t,
+  logs,
+  apiUrl,
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
+  onRefresh,
+  refreshing,
+}) {
+  const firstItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastItem = total === 0 ? 0 : firstItem + logs.length - 1;
+
   return (
     <section className="logs-section" aria-label={t.logs}>
       <div className="section-head">
         <h2>{t.logs}</h2>
-        <span>{logs.length}</span>
+        <div className="section-head-actions">
+          <button
+            aria-label={t.commandRefreshLogs}
+            className="icon-button refresh-icon"
+            disabled={refreshing}
+            onClick={onRefresh}
+            title={t.commandRefreshLogs}
+            type="button"
+          />
+          <span>{total}</span>
+        </div>
       </div>
 
       <div className="log-list">
@@ -24,7 +48,7 @@ export default function AdminLogsSection({ t, logs, apiUrl }) {
             <div className="log-row" key={`${log.date}-${log.file}`}>
               <div>
                 <strong>{log.file}</strong>
-                <span>{log.resource} В· {formatLogTime(log.updated_at)}</span>
+                <span>{log.resource} / {formatLogTime(log.updated_at)}</span>
               </div>
               <span>{formatBytes(log.size)}</span>
               <a href={`${apiUrl}${log.download_url}`} download>
@@ -34,6 +58,35 @@ export default function AdminLogsSection({ t, logs, apiUrl }) {
           ))
         )}
       </div>
+
+      {total > 0 && (
+        <div className="logs-pagination" aria-label={`${t.logs} ${t.logsPage}`}>
+          <span className="logs-pagination-status">
+            {firstItem}-{lastItem} {t.paginationOf} {total}
+          </span>
+          {totalPages > 1 && (
+            <div className="logs-pagination-controls">
+              <button
+                type="button"
+                onClick={() => onPageChange(page - 1)}
+                disabled={page <= 1}
+              >
+                {t.paginationPrevious}
+              </button>
+              <span className="logs-pagination-page">
+                {t.logsPage} {page} {t.paginationOf} {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPageChange(page + 1)}
+                disabled={page >= totalPages}
+              >
+                {t.paginationNext}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

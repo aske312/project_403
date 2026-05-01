@@ -471,6 +471,9 @@ DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
 JWT_SECRET=change_me_before_public_deploy
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
+AUTH_RATE_LIMIT_WINDOW_SECONDS=60
+AUTH_LOGIN_RATE_LIMIT_ATTEMPTS=5
+AUTH_REGISTER_RATE_LIMIT_ATTEMPTS=3
 
 # DEV ACCOUNTS
 DEV_SUPERUSER_ENABLED=True
@@ -495,6 +498,10 @@ LOG_DIR=logs
 LOG_FILE=logs/app.log
 LOG_MAX_BYTES=1048576
 LOG_BACKUP_COUNT=3
+
+# ADMIN
+ADMIN_COMMAND_FILE=logs/admin-command.json
+ADMIN_COMMAND_TTL_SECONDS=30
 
 # UI_API
 VITE_API_URL=$apiUrl
@@ -668,21 +675,133 @@ if (-not $NoReplaceExisting) {
 }
 
 $startedProcessIds = @{}
+$adminCommandFile = Join-Path $Root "logs\admin-command.json"
+$adminCommandArchiveDir = Join-Path $Root "logs\admin-commands"
 
-Write-Step "Starting backend"
 $backendArgs = @(
     "-m", "uvicorn",
     "app.start:app",
     "--host", $BackendHost,
     "--port", "$BackendPort"
 )
-$backend = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
 
-Write-Step "Starting frontend"
 $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort")
-$frontend = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
-Add-ProcessTreeToSet -ProcessId $backend.Id -Target $startedProcessIds
-Add-ProcessTreeToSet -ProcessId $frontend.Id -Target $startedProcessIds
+
+function Start-BackendService {
+    Write-Step "Starting backend"
+    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+    Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
+    return $process
+}
+
+function Start-FrontendService {
+    Write-Step "Starting frontend"
+    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+    Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
+    return $process
+}
+
+function Stop-ServiceProcess {
+    param(
+        $Process,
+        [string]$Name
+    )
+
+    if ($null -eq $Process) {
+        return
+    }
+
+    $Process.Refresh()
+    if ($Process.HasExited) {
+        return
+    }
+
+    Write-Step "Stopping $Name"
+    $targets = @{}
+    Add-ProcessTreeToSet -ProcessId $Process.Id -Target $targets
+    Stop-TrackedProcessTrees -ProcessIds $targets
+    Start-Sleep -Milliseconds 500
+}
+
+function Complete-AdminCommand {
+    param($Command)
+
+    if (-not (Test-Path $adminCommandFile)) {
+        return
+    }
+
+    if (-not (Test-Path $adminCommandArchiveDir)) {
+        New-Item -ItemType Directory -Path $adminCommandArchiveDir -Force | Out-Null
+    }
+
+    $commandId = if ($null -ne $Command -and $Command.id) { $Command.id } else { "invalid-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" }
+    Move-Item -LiteralPath $adminCommandFile -Destination (Join-Path $adminCommandArchiveDir "$commandId.json") -Force
+}
+
+function Get-PendingAdminCommand {
+    if (-not (Test-Path $adminCommandFile)) {
+        return $null
+    }
+
+    try {
+        $command = Get-Content -Raw -Path $adminCommandFile | ConvertFrom-Json
+    } catch {
+        Write-Warning "Admin command file is invalid: $($_.Exception.Message)"
+        Complete-AdminCommand $null
+        return $null
+    }
+
+    try {
+        if ($command.expires_at) {
+            $expiresAt = ([datetime]::Parse($command.expires_at)).ToUniversalTime()
+            if ($expiresAt -lt [datetime]::UtcNow) {
+                Write-Warning "Admin command expired: $($command.command)"
+                Complete-AdminCommand $command
+                return $null
+            }
+        }
+    } catch {
+        Write-Warning "Admin command expiration is invalid: $($_.Exception.Message)"
+        Complete-AdminCommand $command
+        return $null
+    }
+
+    return $command
+}
+
+function Invoke-AdminCommand {
+    param($Command)
+
+    switch ($Command.command) {
+        "restart_backend" {
+            Write-Step "Admin command: restart backend"
+            Stop-ServiceProcess -Process $script:backend -Name "backend"
+            $script:backend = Start-BackendService
+            Complete-AdminCommand $Command
+        }
+        "restart_frontend" {
+            Write-Step "Admin command: restart frontend"
+            Stop-ServiceProcess -Process $script:frontend -Name "frontend"
+            $script:frontend = Start-FrontendService
+            Complete-AdminCommand $Command
+        }
+        "restart_project" {
+            Write-Step "Admin command: restart project"
+            Stop-ServiceProcess -Process $script:frontend -Name "frontend"
+            Stop-ServiceProcess -Process $script:backend -Name "backend"
+            $script:backend = Start-BackendService
+            $script:frontend = Start-FrontendService
+            Complete-AdminCommand $Command
+        }
+        default {
+            Write-Warning "Unknown admin command: $($Command.command)"
+            Complete-AdminCommand $Command
+        }
+    }
+}
+
+$backend = Start-BackendService
+$frontend = Start-FrontendService
 
 Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
@@ -692,6 +811,13 @@ Write-Host "Press Ctrl+C to stop both processes."
 try {
     while ($true) {
         Start-Sleep -Seconds 1
+
+        $command = Get-PendingAdminCommand
+        if ($null -ne $command) {
+            Invoke-AdminCommand $command
+            continue
+        }
+
         $backend.Refresh()
         $frontend.Refresh()
 
