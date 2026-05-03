@@ -29,5 +29,6 @@ export function getFrontendPerformanceMetrics() {
         ? responseEnd - requestStart
         : null,
     startup_ms: markedStartup ?? domReady,
+    build_ms: null,
   };
 }

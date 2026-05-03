@@ -5,6 +5,8 @@ export default function AdminServiceOverview({
   t,
   env,
   backend,
+  frontend,
+  database,
   serviceRows,
   children,
   onRefresh,
@@ -19,7 +21,7 @@ export default function AdminServiceOverview({
           <p>{t.pageSubtitle}</p>
         </div>
 
-        <AdminStatusPanel t={t} env={env} backend={backend} />
+        <AdminStatusPanel t={t} env={env} backend={backend} frontend={frontend} database={database} />
       </section>
 
       {children}

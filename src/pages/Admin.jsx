@@ -17,6 +17,7 @@ import {
   runAdminCommand,
 } from "../utils/apiClient";
 import { adminCopy } from "../utils/adminCopy";
+import { config } from "../config/appConfig";
 import {
   buildEndpointsFromOpenApi,
   buildServiceRows,
@@ -24,14 +25,22 @@ import {
 } from "../utils/adminData";
 import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
 import { getFrontendPerformanceMetrics } from "../utils/performanceMetrics";
+import {
+  getNextLanguage,
+  getNextTheme,
+  getStoredLanguage,
+  getStoredTheme,
+  storeLanguage,
+  storeTheme,
+} from "../utils/themePreference";
 import { getAccessToken, useAuthSession } from "../utils/useAuthSession";
 import "../styles/admin.css";
 
 const LOG_PAGE_SIZE = 10;
 
 export default function Admin() {
-  const [theme, setTheme] = useState("dark");
-  const [lang, setLang] = useState("RU");
+  const [theme, setTheme] = useState(getStoredTheme);
+  const [lang, setLang] = useState(getStoredLanguage);
   const [endpoints, setEndpoints] = useState(fallbackEndpoints);
   const [frontend, setFrontend] = useState(null);
   const [backend, setBackend] = useState(null);
@@ -62,7 +71,7 @@ export default function Admin() {
   } = useAuthSession();
 
   const t = adminCopy[lang];
-  const projectName = backend?.app || import.meta.env.VITE_APP_NAME;
+  const projectName = backend?.app || config.app.project.defaultName;
   const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
   const adminAccessAllowed = canUseAdminPanel(profile, env);
   const accessReady = Boolean(backend) && profileLoaded;
@@ -252,18 +261,9 @@ export default function Admin() {
   }
 
   const restartOptions = [
-    {
-      id: "restart_project",
-      label: t.commandRestartProject,
-    },
-    {
-      id: "restart_backend",
-      label: t.commandRestartBackend,
-    },
-    {
-      id: "restart_frontend",
-      label: t.commandRestartFrontend,
-    },
+    { id: "restart_project", label: t.commandRestartProject },
+    { id: "restart_backend", label: t.commandRestartBackend },
+    { id: "restart_frontend", label: t.commandRestartFrontend },
   ];
 
   const serviceRows = useMemo(
@@ -299,8 +299,8 @@ export default function Admin() {
         profile={profile}
         accountOpen={accountOpen}
         onToggleAccount={() => setAccountOpen((value) => !value)}
-        onToggleLang={() => setLang(lang === "RU" ? "EN" : "RU")}
-        onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+        onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
+        onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
         onLogout={logout}
         adminLinkVisible={adminAccessAllowed}
         adminLinkLabel={t.adminPanel}
@@ -314,6 +314,8 @@ export default function Admin() {
             t={t}
             env={env}
             backend={backend}
+            frontend={frontend}
+            database={database}
             serviceRows={serviceRows}
             onRefresh={refreshServices}
             refreshing={refreshingServices}

@@ -55,6 +55,7 @@ def health():
         "stack_version": stack["version"],
         "version": param.VERSION,
         "startup_ms": param.STARTUP_DURATION_MS,
+        "build_ms": param.BUILD_DURATION_MS,
         "total_runtime_ms": runtime["total_runtime_ms"],
         "current_runtime_ms": runtime["current_runtime_ms"],
         "launch_count": runtime["launch_count"],

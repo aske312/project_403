@@ -1,4 +1,4 @@
-import projectSummaryMarkdown from "../../docks/project-summary.md?raw";
+import projectSummaryMarkdown from "../../docs/h-summary.ru.md?raw";
 
 function parseProjectSummary(markdown) {
   const lines = markdown.split(/\r?\n/);

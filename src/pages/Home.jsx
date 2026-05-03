@@ -3,9 +3,18 @@ import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
 import AuthForm from "../components/AuthForm";
 import AuthIntro from "../components/AuthIntro";
+import { config } from "../config/appConfig";
 import { getHealth, login, register } from "../utils/apiClient";
 import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
 import { homeCopy } from "../utils/homeCopy";
+import {
+  getNextLanguage,
+  getNextTheme,
+  getStoredLanguage,
+  getStoredTheme,
+  storeLanguage,
+  storeTheme,
+} from "../utils/themePreference";
 import { setAccessToken, useAuthSession } from "../utils/useAuthSession";
 import "../styles/home.css";
 
@@ -39,11 +48,11 @@ function getAuthErrorMessage(payload, fallback, t) {
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState("dark");
-  const [lang, setLang] = useState("RU");
+  const [theme, setTheme] = useState(getStoredTheme);
+  const [lang, setLang] = useState(getStoredLanguage);
   const [mode, setMode] = useState("login");
   const [status, setStatus] = useState("");
-  const [projectName, setProjectName] = useState(import.meta.env.VITE_APP_NAME || "Project_403");
+  const [projectName, setProjectName] = useState(config.app.project.defaultName);
   const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.MODE);
   const {
     profile,
@@ -79,7 +88,7 @@ export default function Home() {
         }
       } catch {
         if (!ignore) {
-          setProjectName(import.meta.env.VITE_APP_NAME || "Project_403");
+          setProjectName(config.app.project.defaultName);
           setProjectEnvironment(import.meta.env.MODE);
         }
       }
@@ -124,23 +133,10 @@ export default function Home() {
       }
 
       if (isRegister) {
-        const { response: loginResponse, payload: loginResult } = await login({
-          login: requestPayload.email,
-          password: requestPayload.password,
-        });
-
-        if (!loginResponse.ok) {
-          setProfile(null);
-          setAccountOpen(false);
-          setStatus(getAuthErrorMessage(loginResult, t.loginAfterRegistrationFailed, t));
-          return;
-        }
-
-        setAccessToken(loginResult.access_token);
-        setProfile(loginResult.user);
+        setProfile(null);
+        setAccountOpen(false);
         setSessionExpired(false);
-        setStatus("");
-        setMode("login");
+        setStatus(t.emailConfirmationPending);
         return;
       }
 
@@ -164,22 +160,24 @@ export default function Home() {
         profile={profile}
         accountOpen={accountOpen}
         onToggleAccount={() => setAccountOpen((value) => !value)}
-        onToggleLang={() => setLang(lang === "RU" ? "EN" : "RU")}
-        onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+        onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
+        onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
         onLogout={handleLogout}
         adminLinkVisible={showAdminLink}
         adminLinkLabel={t.adminPanel}
       />
 
-      <main className="auth-shell">
+      <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
         <AuthIntro t={t} projectName={projectName} />
-        <AuthForm
-          t={t}
-          mode={mode}
-          status={visibleStatus}
-          onModeChange={handleModeChange}
-          onSubmit={handleSubmit}
-        />
+        {!profile && (
+          <AuthForm
+            t={t}
+            mode={mode}
+            status={visibleStatus}
+            onModeChange={handleModeChange}
+            onSubmit={handleSubmit}
+          />
+        )}
       </main>
 
       <AppFooter

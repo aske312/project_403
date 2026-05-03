@@ -22,7 +22,34 @@ function formatRuntime(value, fallback) {
   return parts.slice(0, 2).join(" ");
 }
 
-export default function AdminStatusPanel({ t, env, backend }) {
+function formatDuration(value, fallback) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  if (value <= 0) return "0 ms";
+  if (value < 1) return "<1 ms";
+  if (value < 1000) return `${Math.round(value)} ms`;
+  if (value < 60000) {
+    const seconds = value / 1000;
+    return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)} s`;
+  }
+
+  const minutes = value / 60000;
+  return `${minutes < 10 ? minutes.toFixed(1) : Math.round(minutes)} min`;
+}
+
+function getProjectBuildMs(frontend, backend, database) {
+  const values = [frontend?.startup_ms, backend?.startup_ms, database?.startup_ms]
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
+export default function AdminStatusPanel({ t, env, backend, frontend, database }) {
+  const projectBuildMs = getProjectBuildMs(frontend, backend, database);
+
   return (
     <div className="status-panel">
       <div className="status-panel-head">
@@ -35,7 +62,11 @@ export default function AdminStatusPanel({ t, env, backend }) {
       </div>
       <div className="status-version">
         <span>{t.totalRuntime}</span>
-        <strong>{formatRuntime(backend?.total_runtime_ms, t.checking)}</strong>
+        <strong>{formatRuntime(backend?.current_runtime_ms, t.checking)}</strong>
+      </div>
+      <div className="status-version">
+        <span>{t.buildTime}</span>
+        <strong>{formatDuration(projectBuildMs, t.notMeasured)}</strong>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { config } from "../config/appConfig";
 import { getProfile } from "./apiClient";
 
-const ACCESS_TOKEN_KEY = "access_token";
-const SESSION_EXPIRED_KEY = "session_expired";
+const ACCESS_TOKEN_KEY = config.storage.local.authToken;
+const SESSION_EXPIRED_KEY = config.storage.session.sessionExpired;
 
 export function getAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_KEY);

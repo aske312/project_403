@@ -1,0 +1,13 @@
+{
+  "local": {
+    "authToken": "access_token",
+    "interfacePreferences": "display"
+  },
+  "session": {
+    "sessionExpired": "session_expired"
+  },
+  "interfaceDefaults": {
+    "theme": "dark",
+    "language": "RU"
+  }
+}

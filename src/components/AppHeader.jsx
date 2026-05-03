@@ -54,8 +54,14 @@ export default function AppHeader({
           <span>{t.language}</span>
         </button>
 
-        <button className="app-theme-switch" type="button" onClick={onToggleTheme}>
-          {theme === "light" ? t.themeDark : t.themeLight}
+        <button
+          className="app-theme-switch"
+          type="button"
+          onClick={onToggleTheme}
+          aria-label={theme === "light" ? t.themeDark : t.themeLight}
+          title={theme === "light" ? t.themeDark : t.themeLight}
+        >
+          <span className={theme === "light" ? "theme-icon theme-icon-dark" : "theme-icon theme-icon-light"} />
         </button>
 
         {profile && (

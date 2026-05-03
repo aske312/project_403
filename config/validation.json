@@ -1,0 +1,39 @@
+{
+  "forms": {
+    "login": {
+      "login": {
+        "placeholder": "user_403",
+        "minLength": 3,
+        "maxLength": 255,
+        "allowedCharacters": "A-Z a-z 0-9 _ @ . + -",
+        "pattern": "[A-Za-z0-9_@.+-]{3,255}"
+      },
+      "password": {
+        "minLength": 8,
+        "maxLength": 128,
+        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,128}"
+      }
+    },
+    "registration": {
+      "firstName": {
+        "minLength": 1,
+        "maxLength": 40,
+        "pattern": "[A-Za-z\\u0400-\\u04FF-]{1,40}"
+      },
+      "lastName": {
+        "maxLength": 40,
+        "pattern": "[A-Za-z\\u0400-\\u04FF-]{0,40}"
+      },
+      "email": {
+        "minLength": 3,
+        "maxLength": 255
+      },
+      "password": {
+        "minLength": 8,
+        "maxLength": 128,
+        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,128}",
+        "idealMinLength": 12
+      }
+    }
+  }
+}

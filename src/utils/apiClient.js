@@ -1,4 +1,6 @@
-export const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+import { config } from "../config/appConfig";
+
+export const API_URL = config.app.server.frontendApiUrl;
 
 const inFlightJsonRequests = new Map();
 

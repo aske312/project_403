@@ -6,6 +6,7 @@ import { execSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+const appConfig = JSON.parse(readFileSync(new URL('./config/app.json', import.meta.url), 'utf-8'))
 const lock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf-8'))
 const requirements = readFileSync(new URL('./requirements.txt', import.meta.url), 'utf-8')
 
@@ -67,9 +68,19 @@ function getProjectBranch(env) {
 function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch }) {
   const startedAt = performance.now()
   let startupMs = null
+  let buildStartedAt = null
+  let buildMs = null
 
   return {
     name: 'project-403-frontend-metrics',
+    buildStart() {
+      buildStartedAt = performance.now()
+    },
+    closeBundle() {
+      if (buildStartedAt !== null) {
+        buildMs = Math.round((performance.now() - buildStartedAt) * 10) / 10
+      }
+    },
     configureServer(server) {
       const markReady = () => {
         startupMs = Math.round((performance.now() - startedAt) * 10) / 10
@@ -96,6 +107,7 @@ function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBran
             version: appVersion,
             branch: projectBranch,
             startup_ms: startupMs,
+            build_ms: buildMs ?? startupMs,
             mode: server.config.mode,
           }),
         )
@@ -110,8 +122,8 @@ export default defineConfig(({ mode }) => {
   const projectBranch = getProjectBranch(env)
   const envBuildId = env.BUILD_ID && env.BUILD_ID.toLowerCase() !== 'dev' ? env.BUILD_ID : null
   const buildId = envBuildId ?? getGitShortSha()
-  const appVersion = `v ${env.VERSION ?? pkg.version} build ${buildId}`
-  const appName = env.APP_NAME ?? pkg.name
+  const appVersion = `v ${appConfig.project.defaultVersion ?? pkg.version} build ${buildId}`
+  const appName = appConfig.project.defaultName
   const frontendStack = [
     formatDependency('JavaScript V8', process.versions.v8),
     formatDependency('Node.js', process.versions.node),
@@ -128,7 +140,6 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch })],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
-      'import.meta.env.VITE_APP_NAME': JSON.stringify(appName),
       'import.meta.env.VITE_PROJECT_BRANCH': JSON.stringify(projectBranch),
       'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(frontendStack),
       'import.meta.env.VITE_BACKEND_STACK': JSON.stringify(backendStack),

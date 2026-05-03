@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 state_lock = threading.Lock()
 session_started_at = None
 session_started_wall_time = None
-accumulated_runtime_ms = 0.0
 launch_count = 0
 
 
@@ -49,10 +48,9 @@ def get_current_runtime_ms():
 def persist_runtime_state(closed=False):
     now = time.time()
     current_runtime_ms = get_current_runtime_ms()
-    total_runtime_ms = accumulated_runtime_ms + current_runtime_ms
 
     payload = {
-        "total_runtime_ms": round(total_runtime_ms, 1),
+        "total_runtime_ms": 0 if closed else round(current_runtime_ms, 1),
         "current_runtime_ms": 0 if closed else round(current_runtime_ms, 1),
         "launch_count": launch_count,
         "current_launch_started_at": None if closed else session_started_wall_time,
@@ -63,14 +61,13 @@ def persist_runtime_state(closed=False):
 
 
 def start_runtime_session():
-    global accumulated_runtime_ms, launch_count, session_started_at, session_started_wall_time
+    global launch_count, session_started_at, session_started_wall_time
 
     with state_lock:
         if session_started_at is not None:
             return
 
         state = read_state()
-        accumulated_runtime_ms = max(float(state.get("total_runtime_ms") or 0), 0.0)
         launch_count = max(int(state.get("launch_count") or 0), 0) + 1
         session_started_at = time.perf_counter()
         session_started_wall_time = time.time()
@@ -86,13 +83,12 @@ def mark_runtime_seen():
 
 
 def stop_runtime_session():
-    global accumulated_runtime_ms, session_started_at, session_started_wall_time
+    global session_started_at, session_started_wall_time
 
     with state_lock:
         if session_started_at is None:
             return
 
-        accumulated_runtime_ms += get_current_runtime_ms()
         session_started_at = None
         session_started_wall_time = None
         persist_runtime_state(closed=True)
@@ -102,7 +98,7 @@ def get_runtime_metrics():
     with state_lock:
         current_runtime_ms = get_current_runtime_ms()
         return {
-            "total_runtime_ms": round(accumulated_runtime_ms + current_runtime_ms, 1),
+            "total_runtime_ms": round(current_runtime_ms, 1),
             "current_runtime_ms": round(current_runtime_ms, 1),
             "launch_count": launch_count,
         }
