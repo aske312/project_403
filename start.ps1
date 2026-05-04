@@ -890,20 +890,24 @@ if ($UpdateRepo) {
 }
 
 Set-LauncherStatus 10 "launcher" "environment loaded"
+Write-Host ""
 
 if ($StartDb -or $DbOnly) {
     Set-LauncherStatus 20 "postgres" "starting"
+    Write-Host ""
     Start-Database
     Wait-ForDockerHealthy -ContainerName "project_403_postgres" -Label "postgres" -PercentStart 24 -PercentReady 30
 }
 
 if ($DbOnly) {
     Set-LauncherStatus 30 "postgres" "ready"
+    Write-Host ""
     exit 0
 }
 
 if ($StartRedis -or $RedisOnly) {
     Set-LauncherStatus 32 "redis" "starting"
+    Write-Host ""
     try {
         Start-Redis
         Wait-ForDockerHealthy -ContainerName "project_403_redis" -Label "redis" -PercentStart 36 -PercentReady 40
@@ -911,6 +915,7 @@ if ($StartRedis -or $RedisOnly) {
         Write-Warning "Redis start failed, continuing without Redis: $($_.Exception.Message)"
         Write-LauncherLog "Redis start failed: $($_.Exception.Message)"
         Set-LauncherStatus 40 "redis" "unavailable"
+        Write-Host ""
         if ($RedisOnly) {
             throw
         }
@@ -919,21 +924,26 @@ if ($StartRedis -or $RedisOnly) {
 
 if ($RedisOnly) {
     Set-LauncherStatus 40 "redis" "ready"
+    Write-Host ""
     exit 0
 }
 
 if (-not $SkipInstall) {
     Set-LauncherStatus 45 "deps" "preparing"
+    Write-Host ""
     if (-not (Test-Path $VenvPython)) {
         Set-LauncherStatus 47 "deps" "creating venv"
+        Write-Host ""
         $basePython = Get-BasePython
         Invoke-LoggedChecked $basePython.File ($basePython.Args + @("-m", "venv", ".venv"))
     }
 
     Set-LauncherStatus 50 "deps" "updating pip"
+    Write-Host ""
     Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "--upgrade", "pip")
 
     Set-LauncherStatus 53 "deps" "installing python"
+    Write-Host ""
     Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
 
     if (-not (Test-Command $Npm)) {
@@ -942,6 +952,7 @@ if (-not $SkipInstall) {
 
     if ($ForceInstall -or -not (Test-Path "node_modules")) {
         Set-LauncherStatus 57 "deps" "installing frontend"
+        Write-Host ""
         if (Test-Path "package-lock.json") {
             Invoke-LoggedChecked $Npm @("ci")
         } else {
@@ -949,24 +960,30 @@ if (-not $SkipInstall) {
         }
     }
     Set-LauncherStatus 60 "deps" "ready"
+    Write-Host ""
 }
 
 if ($InstallOnly) {
     Set-LauncherStatus 60 "launcher" "environment ready"
+    Write-Host ""
     exit 0
 }
 
 if (-not $SkipBuild) {
     Set-LauncherStatus 65 "frontend" "building"
+    Write-Host ""
     if (Test-BuildOutdated) {
         Set-LauncherStatus 67 "frontend" "bundling"
+        Write-Host ""
         Invoke-LoggedChecked $Npm @("run", "build")
     }
     Set-LauncherStatus 70 "frontend" "build ready"
+    Write-Host ""
 }
 
 if ($BuildOnly) {
     Set-LauncherStatus 70 "launcher" "build ready"
+    Write-Host ""
     exit 0
 }
 
@@ -1103,19 +1120,25 @@ function Invoke-AdminCommand {
 }
 
 Set-LauncherStatus 75 "backend" "starting"
+Write-Host ""
 $backend = Start-BackendService
 Wait-ForHttpEndpoint -Process $backend -Url "http://$BackendHost`:$BackendPort/api/admin/health" -Label "backend" -PercentStart 78 -PercentReady 85
+Write-Host ""
 
 Set-LauncherStatus 88 "frontend" "starting"
+Write-Host ""
 $frontend = Start-FrontendService
 Wait-ForHttpEndpoint -Process $frontend -Url "http://$FrontendHost`:$FrontendPort/__project403/frontend-metrics" -Label "frontend" -PercentStart 90 -PercentReady 96
 
 Set-LauncherStatus 100 "launcher" "project ready"
 Write-Host ""
+Write-Host "Release:  $BuildId v.$AppVersion build $BuildTag is ready" -ForegroundColor Green
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
 Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
-Write-Host "Logs: $StartupBaseDirPath" -ForegroundColor DarkGray
-Write-Host "Press Ctrl+C to stop both processes."
+Write-Host "Database:  " -ForegroundColor Green
+Write-Host ""
+Write-Host "$StartupBaseDirPath - file logs" -ForegroundColor DarkGray
+Write-Host "Press Ctrl+C to stop both processes." -ForegroundColor DarkGray
 
 try {
     while ($true) {

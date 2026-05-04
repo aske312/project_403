@@ -63,8 +63,8 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1
 Ubuntu/Linux:
 
 ```bash
-chmod +x ./start.sh
-./start.sh
+chmod +x ./start.sh (old)
+./start.sh (old)
 ```
 
 Запуск вместе с PostgreSQL через Docker Compose:
@@ -74,7 +74,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb
 ```
 
 ```bash
-./start.sh --start-db
+./start.sh (old) --start-db
 ```
 
 Redis can be started separately:
@@ -84,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartRedis
 ```
 
 ```bash
-./start.sh --start-redis
+./start.sh (old) --start-redis
 ```
 
 Стартовые скрипты требуют готовый `.env`, создают `.venv`, обновляют `pip`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
@@ -111,7 +111,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly
 ```
 
 ```bash
-./start.sh --db-only
+./start.sh (old) --db-only
 ```
 
 ```powershell
@@ -119,7 +119,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -RedisOnly
 ```
 
 ```bash
-./start.sh --redis-only
+./start.sh (old) --redis-only
 ```
 
 Или напрямую:
