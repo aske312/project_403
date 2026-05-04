@@ -129,6 +129,17 @@ def get_sqlite_database_path(url):
     return Path(database).expanduser()
 
 
+def ensure_sqlite_database_file(url):
+    sqlite_path = get_sqlite_database_path(url)
+    if sqlite_path is None:
+        return
+
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+ensure_sqlite_database_file(param.DATABASE_URL)
+
+
 def fallback_database_exists():
     sqlite_path = get_sqlite_database_path(param.DB_FALLBACK_URL)
     if sqlite_path is None:
@@ -202,8 +213,7 @@ async def use_fallback_database():
 
     if not is_database_fallback_enabled():
         raise RuntimeError("Database fallback is disabled.")
-    if not fallback_database_exists():
-        raise RuntimeError("SQLite fallback database file is missing.")
+    ensure_sqlite_database_file(param.DB_FALLBACK_URL)
 
     previous_engine = engine
     active_database_url = param.DB_FALLBACK_URL

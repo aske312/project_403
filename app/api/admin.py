@@ -13,6 +13,7 @@ from app.admin_commands import (
 )
 from app.api.auth.login import get_current_user, get_optional_current_user
 from app.db.models import User
+from app.db.session import get_database_backend, get_public_database_url
 from app.feature_flags import get_feature_flags, is_feature_enabled
 from app.logging_config import get_log_root
 from app.runtime_state import get_online_user_count, get_runtime_metrics
@@ -83,6 +84,19 @@ async def health(current_user: User | None = Depends(get_optional_current_user))
         "environment": param.ENVIRONMENTS,
         "admin_commands_enabled": feature_flags.get("admin_commands", False),
         "feature_flags": feature_flags,
+        "integrations": {
+            "docker_services_enabled": param.DOCKER_SERVICES_ENABLED,
+            "database": {
+                "backend": get_database_backend(),
+                "url": get_public_database_url(),
+                "postgresql_enabled": param.POSTGRESQL_ENABLED,
+                "fallback_enabled": param.DB_FALLBACK_ENABLED,
+            },
+            "redis": {
+                "enabled": param.REDIS_ENABLED,
+                "mode": "redis" if param.REDIS_ENABLED else "local_fallback",
+            },
+        },
     }
 
 

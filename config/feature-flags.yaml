@@ -82,3 +82,70 @@ features:
       anonymous: false
       user: false
       admin: true
+
+  workspace_direct_messages:
+    dev:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+  workspace_team_channels:
+    dev:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+  workspace_voice_rooms:
+    dev:
+      enabled: false
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: false
+      anonymous: false
+      user: false
+      admin: true
+  workspace_quick_actions:
+    dev:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+  workspace_details_panel:
+    dev:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+  workspace_local_composer:
+    dev:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: true
+      admin: true

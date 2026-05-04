@@ -1359,3 +1359,9 @@ input {
     grid-column: 1 / -1;
   }
 }
+
+.composer-disabled {
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}

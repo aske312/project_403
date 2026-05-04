@@ -85,14 +85,21 @@ function getInitials(name) {
     .toUpperCase();
 }
 
-export default function ChatWorkspace({ profile, projectName }) {
+export default function ChatWorkspace({ profile, projectName, featureFlags = {} }) {
   const [space, setSpace] = useState("team");
   const [activeThreadId, setActiveThreadId] = useState("general");
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState({});
 
-  const visibleThreads = threads.filter((thread) => thread.space === space);
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) || visibleThreads[0] || threads[0];
+  const enabledSpaces = spaces.filter((item) => {
+    if (item.id === "direct") return Boolean(featureFlags.workspace_direct_messages);
+    if (item.id === "team") return Boolean(featureFlags.workspace_team_channels);
+    if (item.id === "voice") return Boolean(featureFlags.workspace_voice_rooms);
+    return true;
+  });
+  const safeSpace = enabledSpaces.some((item) => item.id === space) ? space : enabledSpaces[0]?.id || "team";
+  const visibleThreads = threads.filter((thread) => thread.space === safeSpace);
+  const activeThread = visibleThreads.find((thread) => thread.id === activeThreadId) || visibleThreads[0] || threads[0];
   const currentMessages = [...activeThread.messages, ...(localMessages[activeThread.id] || [])];
   const profileName = getProfileName(profile);
 
@@ -129,10 +136,10 @@ export default function ChatWorkspace({ profile, projectName }) {
       <aside className="workspace-rail" aria-label="Разделы">
         <div className="workspace-logo">{getInitials(projectName)}</div>
         <nav className="space-nav">
-          {spaces.map((item) => (
+          {enabledSpaces.map((item) => (
             <button
               key={item.id}
-              className={item.id === space ? "space-button active" : "space-button"}
+              className={item.id === safeSpace ? "space-button active" : "space-button"}
               type="button"
               onClick={() => handleSpaceChange(item.id)}
               title={item.title}
@@ -158,11 +165,13 @@ export default function ChatWorkspace({ profile, projectName }) {
           <input type="search" placeholder="Поиск чатов, групп, каналов" />
         </div>
 
-        <div className="quick-actions">
-          {quickActions.map((action) => (
-            <button key={action} type="button">{action}</button>
-          ))}
-        </div>
+        {featureFlags.workspace_quick_actions && (
+          <div className="quick-actions">
+            {quickActions.map((action) => (
+              <button key={action} type="button">{action}</button>
+            ))}
+          </div>
+        )}
 
         <div className="thread-section-title">Активные диалоги</div>
         <div className="thread-list">
@@ -213,17 +222,22 @@ export default function ChatWorkspace({ profile, projectName }) {
           ))}
         </div>
 
-        <form className="composer" onSubmit={handleSend}>
-          <button type="button" aria-label="Прикрепить файл">+</button>
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={`Сообщение в ${activeThread.name}`}
-          />
-          <button type="submit">Отправить</button>
-        </form>
+        {featureFlags.workspace_local_composer ? (
+          <form className="composer" onSubmit={handleSend}>
+            <button type="button" aria-label="Прикрепить файл">+</button>
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={`Сообщение в ${activeThread.name}`}
+            />
+            <button type="submit">Отправить</button>
+          </form>
+        ) : (
+          <div className="composer composer-disabled">Отправка сообщений отключена feature flag.</div>
+        )}
       </main>
 
+      {featureFlags.workspace_details_panel && (
       <aside className="workspace-details">
         <div className="details-card profile-card">
           <span className="details-avatar">{getInitials(activeThread.name)}</span>
@@ -249,6 +263,7 @@ export default function ChatWorkspace({ profile, projectName }) {
           </ul>
         </div>
       </aside>
+      )}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$RepoUrl = "https://github.com/aske312/project_403.git",
     [string]$ProjectDir = "",
     [switch]$UpdateRepo,
@@ -7,6 +7,7 @@
     [switch]$SkipBuild,
     [switch]$StartDb,
     [switch]$StartRedis,
+    [switch]$DockerServices,
     [switch]$DbOnly,
     [switch]$RedisOnly,
     [switch]$InstallOnly,
@@ -80,6 +81,71 @@ function Get-DotEnvValue {
     }
 
     return $Default
+}
+
+function Test-DotEnvBool {
+    param(
+        [hashtable]$Settings,
+        [string[]]$Names,
+        [bool]$Default = $false
+    )
+
+    foreach ($name in $Names) {
+        if ($Settings.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace($Settings[$name])) {
+            return @("1", "true", "yes", "on").Contains($Settings[$name].Trim().ToLowerInvariant())
+        }
+    }
+
+    return $Default
+}
+
+function Test-PostgresConnection {
+    param(
+        [string]$HostName,
+        [int]$Port,
+        [string]$User,
+        [string]$Password,
+        [string]$Database
+    )
+
+    if (Test-Command "psql") {
+        $oldPassword = $env:PGPASSWORD
+        try {
+            $env:PGPASSWORD = $Password
+            & psql -h $HostName -p $Port -U $User -d $Database -tAc "SELECT 1" *> $null
+            return $LASTEXITCODE -eq 0
+        } finally {
+            $env:PGPASSWORD = $oldPassword
+        }
+    }
+
+    return Test-TcpPort -HostName $HostName -Port $Port -TimeoutMilliseconds 3000
+}
+
+function Test-TcpPort {
+    param(
+        [string]$HostName,
+        [int]$Port,
+        [int]$TimeoutMilliseconds = 3000
+    )
+
+    if ([string]::IsNullOrWhiteSpace($HostName) -or $Port -le 0) {
+        return $false
+    }
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $async = $client.BeginConnect($HostName, $Port, $null, $null)
+        if (-not $async.AsyncWaitHandle.WaitOne($TimeoutMilliseconds, $false)) {
+            return $false
+        }
+        $client.EndConnect($async)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
 }
 
 function Convert-ToLogToken {
@@ -1026,6 +1092,23 @@ $BackendHost = Get-DotEnvValue $envSettings @("HOST") $BackendHost
 $BackendPort = [int](Get-DotEnvValue $envSettings @("PORT") "$BackendPort")
 $FrontendHost = Get-DotEnvValue $envSettings @("FRONTEND_HOST") $FrontendHost
 $FrontendPort = [int](Get-DotEnvValue $envSettings @("FRONTEND_PORT") "$FrontendPort")
+$PostgresqlEnabled = Test-DotEnvBool $envSettings @("POSTGRESQL_ENABLED", "USE_POSTGRESQL", "ENABLE_POSTGRESQL") $false
+$RedisEnabled = Test-DotEnvBool $envSettings @("REDIS_ENABLED", "USE_REDIS", "ENABLE_REDIS") $false
+$DockerEnvEnabled = Test-DotEnvBool $envSettings @("DOCKER_SERVICES_ENABLED", "DOCKER_ENABLED", "START_DOCKER_SERVICES") $false
+if ($DockerEnvEnabled -or $StartDb -or $StartRedis -or $DbOnly -or $RedisOnly) {
+    $DockerServices = $true
+}
+$DbHostValue = Get-DotEnvValue $envSettings @("DB_HOST") "localhost"
+$DbPortValue = [int](Get-DotEnvValue $envSettings @("DB_PORT") "5432")
+$DbUserValue = Get-DotEnvValue $envSettings @("DB_USER") "postgres"
+$DbPasswordValue = Get-DotEnvValue $envSettings @("DB_PASSWORD") ""
+$DbNameValue = Get-DotEnvValue $envSettings @("DB_NAME") "postgres"
+$RedisHostValue = Get-DotEnvValue $envSettings @("REDIS_HOST") "localhost"
+$RedisPortValue = [int](Get-DotEnvValue $envSettings @("REDIS_PORT") "6379")
+$LauncherDockerMode = if ($DockerServices) { "enabled" } else { "disabled" }
+$LauncherDatabaseMode = if ($PostgresqlEnabled) { "PostgreSQL external requested; SQLite fallback enabled" } else { "SQLite" }
+$LauncherRedisMode = if ($RedisEnabled) { "Redis external requested; local fallback enabled" } else { "local fallback" }
+Write-LauncherLog "Integration flags: docker=$LauncherDockerMode; database=$LauncherDatabaseMode; redis=$LauncherRedisMode"
 
 if ($StopOnly) {
     Stop-ExistingProjectProcesses "Stopping project processes"
@@ -1055,10 +1138,33 @@ if ($UpdateRepo) {
 
 Set-LauncherStatus 10 "launcher" "environment loaded"
 
-if ($StartDb -or $DbOnly) {
-    Set-LauncherStatus 20 "postgres" "starting"
-    Start-Database
-    Wait-ForDockerHealthy -ContainerName "project_403_postgres" -Label "postgres" -PercentStart 24 -PercentReady 30
+if ($PostgresqlEnabled -or $StartDb -or $DbOnly) {
+    if ($DockerServices) {
+        Set-LauncherStatus 20 "postgres" "docker starting"
+        try {
+            Start-Database
+            Wait-ForDockerHealthy -ContainerName "project_403_postgres" -Label "postgres" -PercentStart 24 -PercentReady 30
+            $LauncherDatabaseMode = "PostgreSQL docker"
+        } catch {
+            Write-Warning "PostgreSQL docker start failed, backend will use SQLite fallback: $($_.Exception.Message)"
+            Write-LauncherLog "PostgreSQL docker failed; fallback SQLite will be used: $($_.Exception.Message)"
+            Set-LauncherStatus 30 "database" "sqlite fallback"
+            $LauncherDatabaseMode = "SQLite fallback"
+            if ($DbOnly) { throw }
+        }
+    } else {
+        Set-LauncherStatus 20 "postgres" "external check"
+        if (Test-PostgresConnection -HostName $DbHostValue -Port $DbPortValue -User $DbUserValue -Password $DbPasswordValue -Database $DbNameValue) {
+            Set-LauncherStatus 30 "postgres" "external connected"
+            $LauncherDatabaseMode = "PostgreSQL external"
+        } else {
+            Write-Warning "PostgreSQL external connection is unavailable at ${DbHostValue}:${DbPortValue}/${DbNameValue}; backend will use SQLite fallback."
+            Write-LauncherLog "PostgreSQL external connection is unavailable at ${DbHostValue}:${DbPortValue}/${DbNameValue}; fallback SQLite will be used."
+            Set-LauncherStatus 30 "database" "sqlite fallback"
+            $LauncherDatabaseMode = "SQLite fallback"
+            if ($DbOnly) { throw "PostgreSQL external endpoint is unavailable." }
+        }
+    }
 }
 
 if ($DbOnly) {
@@ -1067,17 +1173,35 @@ if ($DbOnly) {
     exit 0
 }
 
-if ($StartRedis -or $RedisOnly) {
-    Set-LauncherStatus 32 "redis" "starting"
-    try {
-        Start-Redis
-        Wait-ForDockerHealthy -ContainerName "project_403_redis" -Label "redis" -PercentStart 36 -PercentReady 40
-    } catch {
-        Write-Warning "Redis start failed, continuing without Redis: $($_.Exception.Message)"
-        Write-LauncherLog "Redis start failed: $($_.Exception.Message)"
-        Set-LauncherStatus 40 "redis" "unavailable"
-        if ($RedisOnly) {
-            throw
+if ($RedisEnabled -or $StartRedis -or $RedisOnly) {
+    if ($DockerServices) {
+        Set-LauncherStatus 32 "redis" "docker starting"
+        try {
+            Start-Redis
+            Wait-ForDockerHealthy -ContainerName "project_403_redis" -Label "redis" -PercentStart 36 -PercentReady 40
+            $LauncherRedisMode = "Redis docker"
+        } catch {
+            Write-Warning "Redis docker start failed, continuing without Redis: $($_.Exception.Message)"
+            Write-LauncherLog "Redis docker start failed: $($_.Exception.Message)"
+            Set-LauncherStatus 40 "redis" "local fallback"
+            $LauncherRedisMode = "local fallback"
+            if ($RedisOnly) {
+                throw
+            }
+        }
+    } else {
+        Set-LauncherStatus 32 "redis" "external check"
+        if (Test-TcpPort -HostName $RedisHostValue -Port $RedisPortValue -TimeoutMilliseconds 2000) {
+            Set-LauncherStatus 40 "redis" "external reachable"
+            $LauncherRedisMode = "Redis external"
+        } else {
+            Write-Warning "Redis external endpoint is unavailable at ${RedisHostValue}:${RedisPortValue}; local fallback will be used."
+            Write-LauncherLog "Redis external endpoint is unavailable at ${RedisHostValue}:${RedisPortValue}; local fallback will be used."
+            Set-LauncherStatus 40 "redis" "local fallback"
+            $LauncherRedisMode = "local fallback"
+            if ($RedisOnly) {
+                throw "Redis external endpoint is unavailable."
+            }
         }
     }
 }
@@ -1292,6 +1416,9 @@ Write-Host "  |                                                            |" -F
 Write-InfoRow "Release" "$BuildId v.$AppVersion build $BuildTag" Green
 Write-InfoRow "Frontend" $FrontendUrl Green
 Write-InfoRow "Backend" $BackendUrl Green
+Write-InfoRow "Docker" $LauncherDockerMode $(if ($LauncherDockerMode -eq "enabled") { [ConsoleColor]::Green } else { [ConsoleColor]::DarkGray })
+Write-InfoRow "DB" $LauncherDatabaseMode Green
+Write-InfoRow "Redis" $LauncherRedisMode Green
 Write-InfoRow "API health" "$BackendUrl/api/admin/health" Green
 Write-InfoRow "Logs" $StartupBaseDirPath DarkGray
 Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan

@@ -184,7 +184,7 @@ export default function Home() {
 
       <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
         {profile ? (
-          <ChatWorkspace profile={profile} projectName={projectName} />
+          <ChatWorkspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
         ) : (
           <>
             <AuthIntro t={t} projectName={projectName} />

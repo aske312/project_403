@@ -18,12 +18,33 @@ PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 DEV_ENVIRONMENTS = {"dev", "development", "local"}
 
 
+def parse_bool_value(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_bool_env(name):
     value = os.getenv(name)
     if value is None or value.strip() == "":
         raise RuntimeError(f"Missing required settings parameter: {name}")
 
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return parse_bool_value(value)
+
+
+def get_optional_bool_env(name, default=False):
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+
+    return parse_bool_value(value)
+
+
+def get_first_bool_env(names, default=False):
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip() != "":
+            return parse_bool_value(value)
+
+    return default
 
 
 def get_str_env(name):
@@ -218,7 +239,7 @@ def read_feature_flags_config(path):
 
 
 def build_database_url():
-    driver = get_str_env("DATABASE_DRIVER")
+    driver = get_optional_str_env("DATABASE_DRIVER", "postgresql+asyncpg")
     user = quote_plus(get_required_env("DB_USER"))
     password = quote_plus(get_required_env("DB_PASSWORD"))
     host = get_required_env("DB_HOST")
@@ -298,8 +319,8 @@ def validate_production_config(settings):
 
     errors = []
 
-    if settings.DATABASE_URL.startswith("sqlite"):
-        errors.append("Database connection must not use SQLite in production.")
+    if settings.POSTGRESQL_ENABLED and settings.DATABASE_URL.startswith("sqlite"):
+        errors.append("Database connection must not use SQLite in production when PostgreSQL integration is enabled.")
 
     jwt_secret = settings.JWT_SECRET.strip()
     if jwt_secret == DEFAULT_JWT_SECRET:
@@ -396,14 +417,15 @@ class Parameters:
     FRONTEND_PORT = get_int_env("FRONTEND_PORT")
     CORS_ORIGINS = get_list_env("CORS_ORIGINS")
 
+    # Integrations
+    POSTGRESQL_ENABLED = get_first_bool_env(["POSTGRESQL_ENABLED", "USE_POSTGRESQL", "ENABLE_POSTGRESQL"], False)
+    REDIS_ENABLED = get_first_bool_env(["REDIS_ENABLED", "USE_REDIS", "ENABLE_REDIS"], False)
+    DOCKER_SERVICES_ENABLED = get_first_bool_env(["DOCKER_SERVICES_ENABLED", "DOCKER_ENABLED", "START_DOCKER_SERVICES"], False)
+
     # Database
-    DATABASE_URL = build_database_url()
-    DB_FALLBACK_URL = get_str_env(
-        "DB_FALLBACK_URL"
-    )
-    DB_FALLBACK_ENABLED = get_bool_env(
-        "DB_FALLBACK_ENABLED"
-    )
+    DB_FALLBACK_URL = get_optional_str_env("DB_FALLBACK_URL", "sqlite+aiosqlite:///./local.db")
+    DATABASE_URL = build_database_url() if POSTGRESQL_ENABLED else DB_FALLBACK_URL
+    DB_FALLBACK_ENABLED = get_optional_bool_env("DB_FALLBACK_ENABLED", True)
     REDIS_URL = get_optional_str_env("REDIS_URL") or build_redis_url()
     REDIS_RATE_LIMIT_PREFIX = get_str_env("REDIS_RATE_LIMIT_PREFIX")
     REDIS_RATE_LIMIT_KEY_TTL_SECONDS = max(

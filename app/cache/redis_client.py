@@ -123,6 +123,10 @@ def get_redis_client():
 async def init_redis():
     global redis_client
 
+    if not param.REDIS_ENABLED:
+        logger.info("Redis integration is disabled; local rate limit fallback is active.")
+        return None
+
     if redis_client is not None:
         return redis_client
 
