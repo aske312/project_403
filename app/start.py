@@ -13,6 +13,7 @@ from app.api.auth.login import router as api_auth_login
 from app.api.auth.registration import router as api_auth_registration
 from app.api.db import router as api_db
 from app.api.admin import router as api_admin
+from app.api.chats import router as api_chats
 from app.setting.redis_client import close_redis, init_redis
 from app.db.session import get_public_database_url, init_active_database, init_db
 from app.logging_config import get_request_resource, setup_console_logging, setup_logging, write_request_log
@@ -73,6 +74,7 @@ app = FastAPI(
 )
 
 app.include_router(api_admin)
+app.include_router(api_chats)
 app.include_router(api_db)
 app.include_router(api_auth_registration)
 app.include_router(api_auth_login)

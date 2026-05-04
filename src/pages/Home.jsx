@@ -188,6 +188,7 @@ export default function Home() {
             projectName={projectName}
             featureFlags={featureFlags}
             version={import.meta.env.VITE_APP_VERSION}
+            environment={projectEnvironment}
           />
         ) : (
           <Auth

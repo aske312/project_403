@@ -364,11 +364,7 @@ export default function Admin() {
         version={backend?.version || import.meta.env.VITE_APP_VERSION}
         onlineUsers={backend?.online_users}
         canViewOnlineUsers={canViewOnlineUsers}
-        links={[
-          { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
-          { href: "https://vk.com/aske312", label: t.vk },
-          { href: "https://t.me/aske312", label: t.telegram },
-        ]}
+links={[]}
       />
     </div>
   );

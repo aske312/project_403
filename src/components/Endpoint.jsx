@@ -40,6 +40,8 @@ export default function Endpoint({ endpoint, token }) {
   const pathParameters = parameters.filter((parameter) => parameter.in === "path");
   const hasBody = !["GET", "DELETE"].includes(method) || bodyTemplate;
   const selectedPresetData = presets.find((preset) => preset.code === selectedPreset);
+  const successPresets = presets.filter((preset) => String(preset.code).startsWith("2"));
+  const errorPresets = presets.filter((preset) => !String(preset.code).startsWith("2"));
 
   const requestUrl = useMemo(() => {
     const resolvedPath = replacePathParams(path, params);
@@ -140,14 +142,36 @@ export default function Endpoint({ endpoint, token }) {
           )}
 
           {presets.length > 0 && (
-            <div className="panel endpoint-presets">
-              <div className="panel-title">Prepared responses</div>
-              <select value={selectedPreset} onChange={(event) => setSelectedPreset(event.target.value)}>
+            <div className="panel endpoint-presets endpoint-response-map">
+              <div className="panel-title">Response map</div>
+              <div className="response-map-grid">
+                <div>
+                  <span>Success</span>
+                  <strong>{successPresets.map((preset) => preset.code).join(", ") || "—"}</strong>
+                </div>
+                <div>
+                  <span>Errors</span>
+                  <strong>{errorPresets.map((preset) => preset.code).join(", ") || "—"}</strong>
+                </div>
+              </div>
+              <div className="response-tabs" aria-label="Response examples">
                 {presets.map((preset) => (
-                  <option key={preset.code} value={preset.code}>{preset.code} — {preset.label}</option>
+                  <button
+                    key={preset.code}
+                    className={preset.code === selectedPreset ? "active" : ""}
+                    type="button"
+                    onClick={() => setSelectedPreset(preset.code)}
+                  >
+                    {preset.code}
+                  </button>
                 ))}
-              </select>
-              {selectedPresetData && <pre className="json compact-json">{JSON.stringify(selectedPresetData, null, 2)}</pre>}
+              </div>
+              {selectedPresetData && (
+                <div className="response-example">
+                  <strong>{selectedPresetData.label}</strong>
+                  <pre className="json compact-json">{JSON.stringify(selectedPresetData.body, null, 2)}</pre>
+                </div>
+              )}
             </div>
           )}
 

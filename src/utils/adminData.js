@@ -113,7 +113,7 @@ function buildResponsePresets(operation) {
   return Object.entries(operation?.responses || {}).map(([code, response]) => ({
     code,
     label: response?.description || `HTTP ${code}`,
-    body: response?.content?.["application/json"]?.schema ? "Schema available in OpenAPI" : response?.description || "",
+    body: response?.content?.["application/json"]?.example || response?.content?.["application/json"]?.schema || { detail: response?.description || `HTTP ${code}` },
   }));
 }
 

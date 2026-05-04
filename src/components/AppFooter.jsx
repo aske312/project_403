@@ -6,7 +6,7 @@ export default function AppFooter({
   version,
   onlineUsers,
   canViewOnlineUsers = false,
-  links,
+  links = [],
 }) {
   const footerClassName = `app-footer app-footer-${variant}`;
   const statusClassName = ["app-status-dot", statusState].filter(Boolean).join(" ");

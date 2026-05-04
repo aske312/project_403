@@ -439,3 +439,35 @@
     display: none;
   }
 }
+
+.app-footer {
+  min-height: 42px;
+  padding: 10px clamp(18px, 4vw, 56px);
+  color: color-mix(in srgb, var(--muted) 76%, transparent);
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.app-footer-auth {
+  border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 24%, transparent);
+}
+
+.app-footer-admin,
+.app-footer-workspace {
+  justify-content: center;
+}
+
+.app-footer-admin .app-footer-links,
+.app-footer-workspace .app-footer-links {
+  display: none;
+}
+
+.app-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  color: var(--primary-text);
+}

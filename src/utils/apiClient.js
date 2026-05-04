@@ -160,6 +160,25 @@ export function getLogs(page = 1, pageSize = 10, token) {
   });
 }
 
+export function getChats(token) {
+  return requestJson("/api/chats", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export function sendChatMessage(chatId, body, token) {
+  return requestJson(`/api/chats/${chatId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ body }),
+  });
+}
+
 export function downloadLog(downloadUrl, token) {
   return requestBlob(downloadUrl, {
     headers: {

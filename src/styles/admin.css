@@ -17,34 +17,35 @@ button {
 .admin-page {
   --ambient-flow-duration: 12s;
   --ambient-flow-easing: ease-in-out;
-  --bg-start: #f8fafc;
-  --bg-mid: #eef4ff;
-  --bg-end: #f6f1ff;
-  --text: #182235;
-  --muted: #64748b;
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-strong: rgba(255, 255, 255, 0.9);
-  --surface-muted: rgba(241, 245, 249, 0.76);
-  --border: rgba(99, 102, 241, 0.16);
-  --shadow: 0 24px 70px rgba(79, 70, 229, 0.11);
-  --primary: #4f46e5;
-  --primary-soft: rgba(79, 70, 229, 0.12);
-  --primary-text: #4338ca;
-  --success: #16a34a;
-  --success-soft: rgba(22, 163, 74, 0.14);
-  --success-text: #0f766e;
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.17);
-  --warning-text: #b45309;
-  --info: #0891b2;
-  --info-soft: rgba(8, 145, 178, 0.12);
-  --info-text: #0e7490;
-  --neutral: #64748b;
-  --neutral-soft: rgba(100, 116, 139, 0.16);
-  --neutral-text: #475569;
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.13);
-  --danger-text: #b91c1c;
+  --bg-start: #f4f1ea;
+  --bg-mid: #eee8dc;
+  --bg-end: #e8e0d2;
+  --text: #20242a;
+  --muted: #6f746d;
+  --soft: #ded7c8;
+  --surface: rgba(255, 252, 244, 0.78);
+  --surface-strong: rgba(255, 253, 248, 0.94);
+  --surface-muted: rgba(239, 232, 218, 0.78);
+  --border: rgba(89, 78, 62, 0.15);
+  --shadow: 0 24px 70px rgba(83, 73, 55, 0.12);
+  --primary: #4d7c8a;
+  --primary-soft: rgba(77, 124, 138, 0.14);
+  --primary-text: #2f6673;
+  --success: #3f8f6b;
+  --success-soft: rgba(63, 143, 107, 0.14);
+  --success-text: #257052;
+  --warning: #c98135;
+  --warning-soft: rgba(201, 129, 53, 0.16);
+  --warning-text: #9a5e1f;
+  --info: #557ca3;
+  --info-soft: rgba(85, 124, 163, 0.14);
+  --info-text: #385f85;
+  --neutral: #8a8172;
+  --neutral-soft: rgba(138, 129, 114, 0.16);
+  --neutral-text: #655f55;
+  --danger: #c96455;
+  --danger-soft: rgba(201, 100, 85, 0.14);
+  --danger-text: #9b4237;
   --code-bg: #0f172a;
   --code-text: #dbeafe;
 
@@ -55,9 +56,9 @@ button {
   flex-direction: column;
   color: var(--text);
   background:
-    linear-gradient(115deg, rgba(79, 70, 229, 0.08), transparent 34%),
-    radial-gradient(circle at 16% 8%, rgba(6, 182, 212, 0.1), transparent 28%),
-    radial-gradient(circle at 88% 14%, rgba(168, 85, 247, 0.1), transparent 26%),
+    linear-gradient(115deg, rgba(77, 124, 138, 0.10), transparent 34%),
+    radial-gradient(circle at 16% 8%, rgba(201, 129, 53, 0.10), transparent 28%),
+    radial-gradient(circle at 88% 14%, rgba(63, 143, 107, 0.09), transparent 26%),
     linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 48%, var(--bg-end) 100%);
 }
 
@@ -1226,4 +1227,56 @@ button {
 
 .compact-json {
   max-height: 180px;
+}
+
+.response-map-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.response-map-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.response-map-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.response-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.response-tabs button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-strong);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.response-tabs button.active {
+  color: var(--primary-text);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.response-example {
+  display: grid;
+  gap: 8px;
 }

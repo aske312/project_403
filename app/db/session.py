@@ -8,9 +8,10 @@ from sqlalchemy import event
 from sqlalchemy import select
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, User
+from app.db.models import Base, Chat, ChatMember, Message, User
 from app.setting.config import parameters as param
 
 logger = logging.getLogger(__name__)
@@ -365,10 +366,55 @@ async def ensure_dev_seed_users():
     )
 
 
+async def ensure_dev_direct_chat():
+    if not is_dev_environment():
+        return
+    if not (param.DEV_SUPERUSER_ENABLED and param.DEV_USER_ENABLED):
+        return
+
+    async with SessionLocal() as db_session:
+        supervisor = await db_session.scalar(
+            select(User).where(User.email == param.DEV_SUPERUSER_EMAIL.strip().lower())
+        )
+        user = await db_session.scalar(
+            select(User).where(User.email == param.DEV_USER_EMAIL.strip().lower())
+        )
+        if not supervisor or not user:
+            return
+
+        existing_result = await db_session.execute(
+            select(Chat)
+            .options(selectinload(Chat.members))
+            .join(ChatMember)
+            .where(ChatMember.user_id.in_([supervisor.id, user.id]))
+        )
+        for chat in existing_result.scalars().unique().all():
+            member_ids = {member.user_id for member in chat.members}
+            if member_ids == {supervisor.id, user.id}:
+                logger.info("DEV direct chat already exists: id=%s", chat.id)
+                return
+
+        chat = Chat(title="DEV: supervisor ↔ user")
+        db_session.add(chat)
+        await db_session.flush()
+        db_session.add_all([
+            ChatMember(chat_id=chat.id, user_id=supervisor.id),
+            ChatMember(chat_id=chat.id, user_id=user.id),
+            Message(
+                chat_id=chat.id,
+                sender_id=supervisor.id,
+                body="DEV чат готов: можно проверять обмен сообщениями между supervisor и user.",
+            ),
+        ])
+        await db_session.commit()
+        logger.info("DEV direct chat created: id=%s supervisor=%s user=%s", chat.id, supervisor.email, user.email)
+
+
 async def init_db():
     await init_active_database(create_missing_tables=True)
 
     await ensure_dev_seed_users()
+    await ensure_dev_direct_chat()
 
 
 async def get_session():
