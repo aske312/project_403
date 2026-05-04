@@ -81,6 +81,11 @@ async def health(current_user: User | None = Depends(get_optional_current_user))
                 "enabled": param.REDIS_ENABLED,
                 "mode": "redis" if param.REDIS_ENABLED else "local_fallback",
             },
+            "realtime": {
+                "enabled": param.WEBSOCKET_ENABLED,
+                "transport": "websocket" if param.WEBSOCKET_ENABLED else "http_fallback",
+                "requires": "uvicorn[standard] or websockets/wsproto",
+            },
         },
     }
 

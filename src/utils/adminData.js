@@ -174,6 +174,7 @@ export function buildServiceRows(t, frontend, backend, database) {
   const integrations = backend?.integrations || {};
   const dockerEnabled = Boolean(integrations.docker_services_enabled);
   const redisEnabled = Boolean(integrations.redis?.enabled);
+  const realtimeEnabled = integrations.realtime?.enabled !== false;
   const databaseIntegration = integrations.database || {};
 
   return [
@@ -225,6 +226,16 @@ export function buildServiceRows(t, frontend, backend, database) {
       statusState: redisEnabled ? "active" : "neutral",
       statusLabel: redisEnabled ? t.active : "local fallback",
       stack: [integrations.redis?.mode || "local_fallback"],
+      latency: t.notMeasured,
+      startupTime: t.notMeasured,
+    },
+    {
+      id: "realtime",
+      name: "Realtime",
+      state: realtimeEnabled ? "active" : "missed",
+      statusState: realtimeEnabled ? "active" : "neutral",
+      statusLabel: realtimeEnabled ? t.active : "http fallback",
+      stack: [integrations.realtime?.transport || (realtimeEnabled ? "websocket" : "http_fallback")],
       latency: t.notMeasured,
       startupTime: t.notMeasured,
     },

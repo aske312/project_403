@@ -42,15 +42,15 @@ MVP приватного мессенджера с React/Vite frontend, FastAPI 
 - список пользователей;
 - создание личных и групповых чатов;
 - хранение и отображение истории сообщений;
-- WebSocket realtime;
+- WebSocket realtime с управлением через `WEBSOCKET_ENABLED`;
 - индикаторы доставки, прочтения, typing и online/offline;
 - тесты auth/admin/chat сценариев;
 - production-профиль запуска ближе к боевому развертыванию.
 
 ## Документация
 
-- [docks/plans.md](docs/plans.md) — рабочий план по эпикам и статусам.
-- [docks/project-summary.md](docs/project-summary.md) — краткое описание текущего и планируемого функционала без технических команд. Этот документ можно использовать как источник summary для главной страницы.
+- [docs/plans.md](docs/plans.md) — рабочий план по эпикам и статусам.
+- [docs/project-summary.md](docs/project-summary.md) — краткое описание текущего и планируемого функционала без технических команд. Этот документ можно использовать как источник summary для главной страницы.
 
 ## Быстрый старт
 
@@ -178,6 +178,15 @@ FRONTEND_PORT=18001
 PORT=18000
 VITE_API_URL=http://127.0.0.1:18000
 ```
+
+Realtime-режим тоже управляется через `.env`:
+
+```env
+WEBSOCKET_ENABLED=True
+```
+
+При `WEBSOCKET_ENABLED=True` установочный скрипт проверит наличие `websockets`/`wsproto`; базовая зависимость зафиксирована как `uvicorn[standard]`.
+
 
 ### Frontend
 

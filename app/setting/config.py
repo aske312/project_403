@@ -420,6 +420,7 @@ class Parameters:
     # Integrations
     POSTGRESQL_ENABLED = get_first_bool_env(["POSTGRESQL_ENABLED", "USE_POSTGRESQL", "ENABLE_POSTGRESQL"], False)
     REDIS_ENABLED = get_first_bool_env(["REDIS_ENABLED", "USE_REDIS", "ENABLE_REDIS"], False)
+    WEBSOCKET_ENABLED = get_first_bool_env(["WEBSOCKET_ENABLED", "USE_WEBSOCKET", "ENABLE_WEBSOCKET"], True)
     DOCKER_SERVICES_ENABLED = get_first_bool_env(["DOCKER_SERVICES_ENABLED", "DOCKER_ENABLED", "START_DOCKER_SERVICES"], False)
 
     # Database

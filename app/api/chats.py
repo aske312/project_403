@@ -199,8 +199,8 @@ async def list_chats(
 
     return {
         "status": "ok",
-        "mode": "dev_direct_messages_ws",
-        "transport": "websocket",
+        "mode": "dev_direct_messages_ws" if param.WEBSOCKET_ENABLED else "dev_direct_messages_http",
+        "transport": "websocket" if param.WEBSOCKET_ENABLED else "http_fallback",
         "message_security": {
             "storage": "encrypted_at_rest_v1",
             "wire": "encoded_payload_over_current_origin",
@@ -240,7 +240,7 @@ async def create_message(
 
 @router.websocket("/ws")
 async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
-    if not is_dev_environment_name(param.ENVIRONMENTS):
+    if not is_dev_environment_name(param.ENVIRONMENTS) or not param.WEBSOCKET_ENABLED:
         await websocket.close(code=1008)
         return
 

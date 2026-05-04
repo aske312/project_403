@@ -823,6 +823,28 @@ function Invoke-LoggedChecked {
     }
 }
 
+function Test-WebSocketSupport {
+    param([string]$PythonPath)
+
+    if ([string]::IsNullOrWhiteSpace($PythonPath) -or -not (Test-Path $PythonPath)) {
+        return $false
+    }
+
+    $script = @'
+import importlib.util
+mods = ("websockets", "wsproto")
+raise SystemExit(0 if any(importlib.util.find_spec(m) for m in mods) else 1)
+'@
+    $tempScript = [System.IO.Path]::GetTempFileName() + ".py"
+    try {
+        Set-Content -LiteralPath $tempScript -Value $script -Encoding utf8
+        & $PythonPath $tempScript *> $null
+        return $LASTEXITCODE -eq 0
+    } finally {
+        Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Test-BuildOutdated {
     if ($ForceBuild) {
         return $true
@@ -1112,6 +1134,7 @@ $FrontendHost = Get-DotEnvValue $envSettings @("FRONTEND_HOST") $FrontendHost
 $FrontendPort = [int](Get-DotEnvValue $envSettings @("FRONTEND_PORT") "$FrontendPort")
 $PostgresqlEnabled = Test-DotEnvBool $envSettings @("POSTGRESQL_ENABLED", "USE_POSTGRESQL", "ENABLE_POSTGRESQL") $false
 $RedisEnabled = Test-DotEnvBool $envSettings @("REDIS_ENABLED", "USE_REDIS", "ENABLE_REDIS") $false
+$WebSocketEnabled = Test-DotEnvBool $envSettings @("WEBSOCKET_ENABLED", "USE_WEBSOCKET", "ENABLE_WEBSOCKET") $true
 $DockerEnvEnabled = Test-DotEnvBool $envSettings @("DOCKER_SERVICES_ENABLED", "DOCKER_ENABLED", "START_DOCKER_SERVICES") $false
 if ($DockerEnvEnabled -or $StartDb -or $StartRedis -or $DbOnly -or $RedisOnly) {
     $DockerServices = $true
@@ -1126,7 +1149,8 @@ $RedisPortValue = [int](Get-DotEnvValue $envSettings @("REDIS_PORT") "6379")
 $LauncherDockerMode = if ($DockerServices) { "enabled" } else { "disabled" }
 $LauncherDatabaseMode = if ($PostgresqlEnabled) { "PostgreSQL external requested; SQLite fallback enabled" } else { "SQLite" }
 $LauncherRedisMode = if ($RedisEnabled) { "Redis external requested; local fallback enabled" } else { "local fallback" }
-Write-LauncherLog "Integration flags: docker=$LauncherDockerMode; database=$LauncherDatabaseMode; redis=$LauncherRedisMode"
+$LauncherRealtimeMode = if ($WebSocketEnabled) { "WebSocket requested" } else { "HTTP fallback" }
+Write-LauncherLog "Integration flags: docker=$LauncherDockerMode; database=$LauncherDatabaseMode; redis=$LauncherRedisMode; realtime=$LauncherRealtimeMode"
 
 if ($StopOnly) {
     Stop-ExistingProjectProcesses "Stopping project processes"
@@ -1244,6 +1268,27 @@ if (-not $SkipInstall) {
     Set-LauncherStatus 53 "deps" "installing python"
     Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
 
+    if ($WebSocketEnabled) {
+        Set-LauncherStatus 55 "realtime" "checking websocket"
+        if (Test-WebSocketSupport -PythonPath $VenvPython) {
+            $LauncherRealtimeMode = "WebSocket enabled"
+            Write-LauncherLog "WebSocket support detected: websockets/wsproto"
+        } else {
+            Write-Warning "WebSocket support is missing; installing uvicorn[standard]."
+            Write-LauncherLog "WebSocket support missing; installing uvicorn[standard]"
+            Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "uvicorn[standard]")
+            if (Test-WebSocketSupport -PythonPath $VenvPython) {
+                $LauncherRealtimeMode = "WebSocket enabled"
+            } else {
+                $LauncherRealtimeMode = "WebSocket unavailable"
+                throw "WebSocket support was requested, but neither websockets nor wsproto is available after installation."
+            }
+        }
+    } else {
+        $LauncherRealtimeMode = "HTTP fallback"
+        Write-LauncherLog "WebSocket disabled by .env flag; chat will use HTTP fallback."
+    }
+
     if (-not (Test-Command $Npm)) {
         throw "Node.js/npm is not installed or is not available in PATH."
     }
@@ -1265,8 +1310,18 @@ if ($InstallOnly) {
     exit 0
 }
 
+if ($SkipInstall -and $WebSocketEnabled) {
+    if (Test-WebSocketSupport -PythonPath $VenvPython) {
+        $LauncherRealtimeMode = "WebSocket enabled"
+    } else {
+        $LauncherRealtimeMode = "WebSocket missing"
+        throw "WEBSOCKET_ENABLED=True, but WebSocket dependencies are missing. Run without -SkipInstall or install uvicorn[standard]."
+    }
+}
+
 if (-not $SkipBuild) {
-    Set-LauncherStatus 65 "frontend" "building"
+    Set-LauncherStatus 65 "frontend" ("building / realtime: " + $LauncherRealtimeMode)
+    Write-LauncherLog ("Frontend build style: realtime={0}; theme={1}; env={2}" -f $LauncherRealtimeMode, (Get-DotEnvValue $envSettings @("VITE_DEFAULT_THEME") "light"), (Get-DotEnvValue $envSettings @("ENVIRONMENTS") "dev"))
     if (Test-BuildOutdated) {
         Set-LauncherStatus 67 "frontend" "bundling"
         Invoke-LoggedChecked $Npm @("run", "build")
@@ -1438,6 +1493,7 @@ Write-InfoRow "Backend" $BackendUrl Green
 Write-InfoRow "Docker" $LauncherDockerMode (Get-ModeColor $LauncherDockerMode)
 Write-InfoRow "DB" $LauncherDatabaseMode (Get-ModeColor $LauncherDatabaseMode)
 Write-InfoRow "Redis" $LauncherRedisMode (Get-ModeColor $LauncherRedisMode)
+Write-InfoRow "Realtime" $LauncherRealtimeMode (Get-ModeColor $LauncherRealtimeMode)
 Write-InfoRow "API health" "$BackendUrl/api/admin/health" Green
 Write-InfoRow "Logs" $StartupBaseDirPath DarkGray
 Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan

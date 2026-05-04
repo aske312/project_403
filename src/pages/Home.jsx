@@ -57,6 +57,7 @@ export default function Home() {
   const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.VITE_ENVIRONMENTS);
   const [featureFlags, setFeatureFlags] = useState({});
   const [onlineUsers, setOnlineUsers] = useState(null);
+  const [integrations, setIntegrations] = useState({});
   const {
     profile,
     setProfile,
@@ -91,13 +92,17 @@ export default function Home() {
           setProjectEnvironment(payload.environment || import.meta.env.VITE_ENVIRONMENTS);
           setFeatureFlags(payload.feature_flags || {});
           setOnlineUsers(payload.online_users);
+        setIntegrations(payload.integrations || {});
+          setIntegrations(payload.integrations || {});
         }
       } catch {
         if (!ignore) {
           setProjectName(config.app.project.defaultName);
           setProjectEnvironment(import.meta.env.VITE_ENVIRONMENTS);
           setFeatureFlags({});
+          setIntegrations({});
           setOnlineUsers(null);
+          setIntegrations({});
         }
       }
     }
@@ -153,6 +158,7 @@ export default function Home() {
         const { payload } = await getHealth(result.access_token);
         setFeatureFlags(payload.feature_flags || {});
         setOnlineUsers(payload.online_users);
+        setIntegrations(payload.integrations || {});
       } catch {
         setFeatureFlags({});
       }
@@ -187,6 +193,7 @@ export default function Home() {
             featureFlags={featureFlags}
             version={import.meta.env.VITE_APP_VERSION}
             environment={projectEnvironment}
+            integrations={integrations}
           />
         ) : (
           <Auth

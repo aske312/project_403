@@ -39,7 +39,7 @@ function mapLiveChatToThread(chat) {
   };
 }
 
-export default function ChatWorkspace({ profile, projectName, featureFlags = {}, environment = "dev" }) {
+export default function ChatWorkspace({ profile, projectName, featureFlags = {}, environment = "dev", integrations = {} }) {
   const [space, setSpace] = useState("team");
   const [activeThreadId, setActiveThreadId] = useState("general");
   const [draft, setDraft] = useState("");
@@ -50,6 +50,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
   const socketRef = useRef(null);
 
   const liveChatEnabled = String(environment || "").toLowerCase().includes("dev");
+  const websocketEnabled = integrations?.realtime?.enabled !== false;
 
   useEffect(() => {
     if (!liveChatEnabled || !profile) return undefined;
@@ -81,6 +82,14 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
 
     const token = getAccessToken();
     if (!token) return () => { ignore = true; };
+
+    if (!websocketEnabled) {
+      const statusTimer = window.setTimeout(() => setLiveStatus("http"), 0);
+      return () => {
+        ignore = true;
+        window.clearTimeout(statusTimer);
+      };
+    }
 
     const ws = new WebSocket(getWebSocketUrl("/api/chats/ws", token));
     socketRef.current = ws;
@@ -127,7 +136,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
       ws.close();
       socketRef.current = null;
     };
-  }, [liveChatEnabled, profile]);
+  }, [liveChatEnabled, profile, websocketEnabled]);
 
   const threads = useMemo(() => (
     liveThreads.length > 0 ? [...liveThreads, ...staticThreads] : staticThreads
