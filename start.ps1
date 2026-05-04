@@ -315,7 +315,7 @@ function Stop-ExistingProjectProcesses {
 
     Write-Step $Message
     foreach ($record in ($targets.Values | Sort-Object ProcessId -Descending)) {
-        Write-Host "Stopping PID $($record.ProcessId) ($($record.Name))"
+        Write-LauncherLog "Stopping PID $($record.ProcessId) ($($record.Name))"
         Stop-ProcessTree -ProcessId $record.ProcessId
     }
 
@@ -492,10 +492,13 @@ function Invoke-Checked {
         [string[]]$Arguments
     )
 
+    Write-LauncherLog ("RUN: {0} {1}" -f $FilePath, ($Arguments -join " "))
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
+        Write-LauncherLog ("EXIT: {0}" -f $LASTEXITCODE)
         throw "Command failed: $FilePath $($Arguments -join ' ')"
     }
+    Write-LauncherLog "EXIT: 0"
 }
 
 function Invoke-LoggedChecked {
@@ -504,6 +507,7 @@ function Invoke-LoggedChecked {
         [string[]]$Arguments
     )
 
+    Write-LauncherLog ("RUN: {0} {1}" -f $FilePath, ($Arguments -join " "))
     $tempOut = [System.IO.Path]::GetTempFileName()
     $tempErr = [System.IO.Path]::GetTempFileName()
 
@@ -525,8 +529,11 @@ function Invoke-LoggedChecked {
         }
 
         if ($process.ExitCode -ne 0) {
+            Write-LauncherLog ("EXIT: {0}" -f $process.ExitCode)
             throw "Command failed: $FilePath $($Arguments -join ' ')"
         }
+
+        Write-LauncherLog "EXIT: 0"
     } finally {
         Remove-Item -LiteralPath $tempOut, $tempErr -Force -ErrorAction SilentlyContinue
     }
@@ -583,6 +590,7 @@ function Start-Database {
 
     Install-Docker
 
+    Write-LauncherLog "RUN: docker compose up -d db"
     Write-Step "Starting PostgreSQL"
     Invoke-Checked "docker" @("compose", "up", "-d", "db")
 }
@@ -594,6 +602,7 @@ function Start-Redis {
 
     Install-Docker
 
+    Write-LauncherLog "RUN: docker compose up -d redis"
     Write-Step "Starting Redis"
     Invoke-Checked "docker" @("compose", "up", "-d", "redis")
 }
@@ -605,6 +614,12 @@ $StartupLogDir = Join-Path $Root "logs\startup"
 New-Item -ItemType Directory -Path $StartupLogDir -Force | Out-Null
 $StartupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $StartupLogFile = Join-Path $StartupLogDir "launcher-$StartupStamp.log"
+$RuntimeLogDir = Join-Path $Root "logs\runtime\run-$StartupStamp"
+New-Item -ItemType Directory -Path $RuntimeLogDir -Force | Out-Null
+$BackendStdoutLog = Join-Path $RuntimeLogDir "backend.stdout.log"
+$BackendStderrLog = Join-Path $RuntimeLogDir "backend.stderr.log"
+$FrontendStdoutLog = Join-Path $RuntimeLogDir "frontend.stdout.log"
+$FrontendStderrLog = Join-Path $RuntimeLogDir "frontend.stderr.log"
 $script:launcherStart = Get-Date
 
 function Write-LauncherLog {
@@ -859,13 +874,17 @@ $backendArgs = @(
 $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort")
 
 function Start-BackendService {
-    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $StartupLogFile -RedirectStandardError $StartupLogFile -PassThru
+    Write-LauncherLog ("RUN: {0} {1}" -f $VenvPython, ($backendArgs -join " "))
+    Write-LauncherLog ("BACKEND_LOGS: stdout={0} stderr={1}" -f $BackendStdoutLog, $BackendStderrLog)
+    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $BackendStdoutLog -RedirectStandardError $BackendStderrLog -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
 
 function Start-FrontendService {
-    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $StartupLogFile -RedirectStandardError $StartupLogFile -PassThru
+    Write-LauncherLog ("RUN: {0} {1}" -f $Npm, ($frontendArgs -join " "))
+    Write-LauncherLog ("FRONTEND_LOGS: stdout={0} stderr={1}" -f $FrontendStdoutLog, $FrontendStderrLog)
+    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $FrontendStdoutLog -RedirectStandardError $FrontendStderrLog -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
@@ -981,7 +1000,8 @@ Set-LauncherStatus 100 "launcher" "project ready"
 Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
 Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
-Write-Host "Log: $StartupLogFile" -ForegroundColor DarkGray
+Write-Host "Startup log: $StartupLogFile" -ForegroundColor DarkGray
+Write-Host "Runtime logs: $RuntimeLogDir" -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C to stop both processes."
 
 try {

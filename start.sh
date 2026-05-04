@@ -119,20 +119,32 @@ STARTUP_LOG_DIR="logs/startup"
 mkdir -p "$STARTUP_LOG_DIR"
 STARTUP_STAMP="$(date -u +%Y%m%d-%H%M%S)"
 STARTUP_LOG_FILE="$STARTUP_LOG_DIR/launcher-$STARTUP_STAMP.log"
+RUNTIME_LOG_DIR="logs/runtime/run-$STARTUP_STAMP"
+mkdir -p "$RUNTIME_LOG_DIR"
+BACKEND_STDOUT_LOG="$RUNTIME_LOG_DIR/backend.stdout.log"
+BACKEND_STDERR_LOG="$RUNTIME_LOG_DIR/backend.stderr.log"
+FRONTEND_STDOUT_LOG="$RUNTIME_LOG_DIR/frontend.stdout.log"
+FRONTEND_STDERR_LOG="$RUNTIME_LOG_DIR/frontend.stderr.log"
 
 log_detail() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$STARTUP_LOG_FILE"
 }
 
 run_logged() {
+    log_detail "RUN: $*"
     "$@" >>"$STARTUP_LOG_FILE" 2>&1
 }
 
 run_logged_checked() {
-    if ! run_logged "$@"; then
-        echo "Command failed: $*" >&2
-        exit 1
+    if run_logged "$@"; then
+        log_detail "EXIT: 0"
+        return 0
     fi
+
+    local rc=$?
+    log_detail "EXIT: $rc"
+    echo "Command failed: $*" >&2
+    exit 1
 }
 
 status() {
@@ -180,6 +192,7 @@ wait_for_http_endpoint() {
         sleep 1
     done
 
+    log_detail "TIMEOUT: $label $url"
     echo "$label did not become ready at $url within $timeout_seconds seconds." >&2
     exit 1
 }
@@ -205,6 +218,7 @@ wait_for_docker_healthy() {
         sleep 1
     done
 
+    log_detail "TIMEOUT: $label $container_name"
     echo "$label did not become healthy within $timeout_seconds seconds." >&2
     exit 1
 }
@@ -381,6 +395,7 @@ start_database() {
 
     install_docker
 
+    log_detail "RUN: docker compose up -d db"
     step "Starting PostgreSQL"
     docker compose up -d db
 }
@@ -393,8 +408,13 @@ start_redis() {
 
     install_docker
 
+    log_detail "RUN: docker compose up -d redis"
     step "Starting Redis"
-    if ! docker compose up -d redis >>"$STARTUP_LOG_FILE" 2>&1; then
+    if docker compose up -d redis >>"$STARTUP_LOG_FILE" 2>&1; then
+        log_detail "EXIT: 0"
+    else
+        local rc=$?
+        log_detail "EXIT: $rc"
         return 1
     fi
 }
@@ -514,12 +534,16 @@ ADMIN_COMMAND_FILE="$(dotenv_value ADMIN_COMMAND_FILE || printf '%s' "${ADMIN_CO
 ADMIN_COMMAND_ARCHIVE_DIR="logs/admin-commands"
 
 start_backend() {
-    .venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" >>"$STARTUP_LOG_FILE" 2>&1 &
+    log_detail "RUN: .venv/bin/python -m uvicorn app.start:app --host $BACKEND_HOST --port $BACKEND_PORT"
+    log_detail "BACKEND_LOGS: stdout=$BACKEND_STDOUT_LOG stderr=$BACKEND_STDERR_LOG"
+    .venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" >>"$BACKEND_STDOUT_LOG" 2>>"$BACKEND_STDERR_LOG" &
     BACKEND_PID=$!
 }
 
 start_frontend() {
-    npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" >>"$STARTUP_LOG_FILE" 2>&1 &
+    log_detail "RUN: npm run dev -- --host $FRONTEND_HOST --port $FRONTEND_PORT"
+    log_detail "FRONTEND_LOGS: stdout=$FRONTEND_STDOUT_LOG stderr=$FRONTEND_STDERR_LOG"
+    npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" >>"$FRONTEND_STDOUT_LOG" 2>>"$FRONTEND_STDERR_LOG" &
     FRONTEND_PID=$!
 }
 
@@ -637,7 +661,8 @@ status 100 "launcher" "project ready"
 printf '\n'
 printf '\nFrontend: http://%s:%s\n' "$FRONTEND_HOST" "$FRONTEND_PORT"
 printf 'Backend:  http://%s:%s\n' "$BACKEND_HOST" "$BACKEND_PORT"
-printf 'Log: %s\n' "$STARTUP_LOG_FILE"
+printf 'Startup log: %s\n' "$STARTUP_LOG_FILE"
+printf 'Runtime logs: %s\n' "$RUNTIME_LOG_DIR"
 printf 'Press Ctrl+C to stop both processes.\n'
 
 while true; do
