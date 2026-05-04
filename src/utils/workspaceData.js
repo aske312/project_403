@@ -13,12 +13,14 @@ export const threads = [
     description: "Общий канал проекта",
     unread: 4,
     status: "online",
+    isPinned: false,
+    pinOrder: 100,
     members: 18,
     topic: "Новости, быстрые апдейты и решения по Project_403.",
     messages: [
-      { id: 1, author: "Mira", role: "frontend", time: "10:12", text: "Собрала первый экран workspace: слева каналы, в центре чат, справа детали." },
-      { id: 2, author: "Alex", role: "backend", time: "10:14", text: "Ок, backend пока можно не трогать. Главное — заложить нормальную структуру под будущие API." },
-      { id: 3, author: "You", own: true, role: "owner", time: "10:18", text: "Давайте оставим простую логику, но интерфейс сделаем похожим на реальное приложение." },
+      { id: 1, author: "Mira", role: "frontend", time: "10:12", text: "Собрала первый экран workspace: слева каналы, в центре чат, справа детали.", status: "read" },
+      { id: 2, author: "Alex", role: "backend", time: "10:14", text: "Ок, backend пока можно не трогать. Главное — заложить нормальную структуру под будущие API.", status: "read" },
+      { id: 3, author: "You", own: true, role: "owner", time: "10:18", text: "Давайте оставим простую логику, но интерфейс сделаем похожим на реальное приложение.", status: "read" },
     ],
   },
   {
@@ -29,11 +31,13 @@ export const threads = [
     description: "Закрытая группа разработки",
     unread: 2,
     status: "busy",
+    isPinned: false,
+    pinOrder: 101,
     members: 6,
     topic: "Обсуждение auth, ролей, feature flags и инфраструктуры.",
     messages: [
-      { id: 1, author: "Nikita", role: "infra", time: "09:44", text: "Redis пока оставим за флагом. Для локального режима хватит in-memory заглушки." },
-      { id: 2, author: "You", own: true, role: "owner", time: "09:49", text: "Да, не усложняем. Главное — не завязать UI на то, чего ещё нет." },
+      { id: 1, author: "Nikita", role: "infra", time: "09:44", text: "Redis пока оставим за флагом. Для локального режима хватит in-memory заглушки.", status: "read" },
+      { id: 2, author: "You", own: true, role: "owner", time: "09:49", text: "Да, не усложняем. Главное — не завязать UI на то, чего ещё нет.", status: "delivered" },
     ],
   },
   {
@@ -44,27 +48,15 @@ export const threads = [
     description: "личные сообщения",
     unread: 0,
     status: "online",
+    isPinned: false,
+    pinOrder: 102,
     members: 2,
     topic: "Персональный диалог без шума каналов.",
     messages: [
-      { id: 1, author: "Alice", role: "designer", time: "Вчера", text: "Можно сделать карточки каналов более компактными на мобильном?" },
-      { id: 2, author: "You", own: true, role: "owner", time: "Вчера", text: "Да, добавлю адаптивный режим и сохраню текущую тему." },
-    ],
-  },
-  {
-    id: "release",
-    type: "channel",
-    space: "team",
-    name: "# release",
-    description: "релизы и чек-листы",
-    unread: 0,
-    status: "offline",
-    members: 9,
-    topic: "Стабилизация, проверка сборок и подготовка changelog.",
-    messages: [
-      { id: 1, author: "Mira", role: "frontend", time: "08:20", text: "Frontend lint и build зелёные. Нужен только финальный smoke test." },
+      { id: 1, author: "Alice", role: "designer", time: "Вчера", text: "Можно сделать карточки каналов более компактными на мобильном?", status: "read" },
+      { id: 2, author: "You", own: true, role: "owner", time: "Вчера", text: "Да, добавлю адаптивный режим и сохраню текущую тему.", status: "read" },
     ],
   },
 ];
 
-export const quickActions = ["Новый чат", "Создать канал", "Группа", "Invite"];
+export const dialogCreateActions = ["Личный чат", "Группа", "Канал"];

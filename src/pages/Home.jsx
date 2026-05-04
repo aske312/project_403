@@ -171,21 +171,19 @@ export default function Home() {
 
   return (
     <div className={`auth-page ${theme}`}>
-      {!profile && (
-        <AppControls
-          theme={theme}
-          lang={lang}
-          t={t}
-          profile={profile}
-          accountOpen={accountOpen}
-          onToggleAccount={() => setAccountOpen((value) => !value)}
-          onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
-          onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
-          onLogout={handleLogout}
-          adminLinkVisible={showAdminLink}
-          adminLinkLabel={t.adminPanel}
-        />
-      )}
+      <AppControls
+        theme={theme}
+        lang={lang}
+        t={t}
+        profile={profile}
+        accountOpen={accountOpen}
+        onToggleAccount={() => setAccountOpen((value) => !value)}
+        onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
+        onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
+        onLogout={handleLogout}
+        adminLinkVisible={showAdminLink}
+        adminLinkLabel={t.adminPanel}
+      />
 
       <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
         {profile ? (
@@ -196,14 +194,6 @@ export default function Home() {
             version={import.meta.env.VITE_APP_VERSION}
             environment={projectEnvironment}
             integrations={integrations}
-            theme={theme}
-            lang={lang}
-            t={t}
-            adminLinkVisible={showAdminLink}
-            adminLinkLabel={t.adminPanel}
-            onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
-            onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
-            onLogout={handleLogout}
           />
         ) : (
           <Auth

@@ -1539,14 +1539,11 @@ function Get-LiveLogColor {
     )
 
     $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
-    if ($normalized -match "warning|warn|fallback") {
-        return [ConsoleColor]::Yellow
-    }
-    if ($normalized -match "error|exception|traceback|failed|critical") {
+    if ($Source -match "err" -or $normalized -match "error|exception|traceback|failed|critical") {
         return [ConsoleColor]::Red
     }
-    if ($normalized -match "websocket|connection open|connection closed|accepted") {
-        return [ConsoleColor]::Cyan
+    if ($normalized -match "warning|warn|fallback") {
+        return [ConsoleColor]::Yellow
     }
     if ($normalized -match "started|ready|running|application startup complete|200 ok|vite") {
         return [ConsoleColor]::Green
@@ -1554,28 +1551,7 @@ function Get-LiveLogColor {
     if ($normalized -match "info|http|request|response") {
         return [ConsoleColor]::Cyan
     }
-    if ($Source -match "err") {
-        return [ConsoleColor]::DarkYellow
-    }
     return $DefaultColor
-}
-
-function Get-LiveLogDisplaySource {
-    param(
-        [string]$Source,
-        [string]$Line
-    )
-
-    $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
-    if ($Source -eq "backend:err" -and $normalized -match "info:.*(websocket|connection open|connection closed|accepted)") {
-        return "backend:ws"
-    }
-
-    if ($Source -eq "backend:err" -and $normalized -match "^info:") {
-        return "backend"
-    }
-
-    return $Source
 }
 
 function Write-LiveLogLine {
@@ -1590,17 +1566,14 @@ function Write-LiveLogLine {
     }
 
     $time = Get-Date -Format "HH:mm:ss"
-    $displaySource = Get-LiveLogDisplaySource -Source $Source -Line $Line
-    $lineColor = Get-LiveLogColor -Source $displaySource -Line $Line -DefaultColor $Color
+    $lineColor = Get-LiveLogColor -Source $Source -Line $Line -DefaultColor $Color
     $sourceColor = [ConsoleColor]::Magenta
-    if ($displaySource -match "err") {
+    if ($Source -match "err") {
         $sourceColor = [ConsoleColor]::Yellow
-    } elseif ($displaySource -match "ws") {
-        $sourceColor = [ConsoleColor]::Cyan
     }
 
     Write-Host ("  [{0}] " -f $time) -NoNewline -ForegroundColor DarkGray
-    Write-Host ("{0,-12}" -f $displaySource) -NoNewline -ForegroundColor $sourceColor
+    Write-Host ("{0,-12}" -f $Source) -NoNewline -ForegroundColor $sourceColor
     Write-Host " | " -NoNewline -ForegroundColor DarkGray
     Write-Host $Line -ForegroundColor $lineColor
 }

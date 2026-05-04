@@ -1,45 +1,81 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { dialogCreateActions } from "../utils/workspaceData";
 import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
-function getProfileTag(profile) {
-  if (!profile) return "@guest";
-  return profile.tag || (profile.handle ? `@${profile.handle}` : profile.email || "@user");
+function sortThreads(threads) {
+  return [...threads].sort((left, right) => {
+    if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+    if (left.isPinned && right.isPinned) return (left.pinOrder || 0) - (right.pinOrder || 0);
+    return String(left.name).localeCompare(String(right.name), "ru");
+  });
 }
 
-export default function WorkspaceSidebar({ profile, threads, activeThreadId, onThreadChange, onOpenSettings, onCreateChat }) {
-  const [profileCollapsed, setProfileCollapsed] = useState(false);
+export default function WorkspaceSidebar({
+  profile,
+  threads,
+  contacts,
+  contactsQuery,
+  activeThreadId,
+  collapsed,
+  onCollapseToggle,
+  onContactsQueryChange,
+  onThreadChange,
+  onOpenSettings,
+  onPinThread,
+  onMovePinned,
+}) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const profileName = getProfileName(profile);
-  const profileTag = getProfileTag(profile);
+  const sortedThreads = useMemo(() => sortThreads(threads), [threads]);
+
+  if (collapsed) {
+    return (
+      <aside className="workspace-sidebar workspace-sidebar-collapsed">
+        <button className="profile-mini" type="button" onClick={onCollapseToggle} title="Развернуть меню">
+          {getInitials(profileName)}
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside className="workspace-sidebar">
-      <button
-        className={profileCollapsed ? "workspace-profile-card collapsed" : "workspace-profile-card"}
-        type="button"
-        onClick={() => setProfileCollapsed((current) => !current)}
-        aria-label="Свернуть или раскрыть профиль"
-      >
-        <span className="workspace-profile-avatar">{getInitials(profileName)}</span>
-        <span className="workspace-profile-meta">
-          <span className="workspace-kicker">Вы вошли как</span>
-          <strong>{profileName}</strong>
-          <small>{profileTag}</small>
-        </span>
-      </button>
-
-      <div className="workspace-sidebar-actions" aria-label="Действия чата">
-        <button className="workspace-icon-button" type="button" aria-label="Настройки" onClick={onOpenSettings}>⚙</button>
-        <button className="workspace-icon-button" type="button" aria-label="Добавить чат" onClick={onCreateChat}>+</button>
+      <div className={profileOpen ? "workspace-profile open" : "workspace-profile"}>
+        <button className="workspace-profile-main" type="button" onClick={() => setProfileOpen((value) => !value)}>
+          <span className="profile-avatar">{getInitials(profileName)}</span>
+          <span className="profile-meta">
+            <strong>{profileName}</strong>
+            <small>@{profile?.handle || "user"}</small>
+          </span>
+          <span className="profile-chevron">{profileOpen ? "⌃" : "⌄"}</span>
+        </button>
+        {profileOpen && (
+          <div className="workspace-profile-actions">
+            <button type="button" onClick={onOpenSettings} aria-label="Настройки">⚙</button>
+            <button type="button" aria-label="Дополнительно">◇</button>
+            <button type="button" onClick={onCollapseToggle}>Свернуть</button>
+          </div>
+        )}
       </div>
 
       <div className="workspace-search">
         <span aria-hidden="true">⌕</span>
-        <input type="search" placeholder="Найти диалог" />
+        <input type="search" placeholder="Поиск чатов" />
       </div>
 
-      <div className="thread-section-title">Диалоги</div>
-      <div className="thread-list">
-        {threads.map((thread) => (
+      <div className="thread-section-head">
+        <button className="thread-section-title as-button" type="button">Диалоги</button>
+        <button className="workspace-icon-button" type="button" aria-label="Создать чат" onClick={() => setCreateOpen((value) => !value)}>+</button>
+      </div>
+      {createOpen && (
+        <div className="dialog-create-popover">
+          {dialogCreateActions.map((item) => <button key={item} type="button">{item}</button>)}
+        </div>
+      )}
+
+      <div className="thread-list compact">
+        {sortedThreads.map((thread, index) => (
           <button
             key={thread.id}
             className={thread.id === activeThreadId ? "thread-card active" : "thread-card"}
@@ -48,11 +84,39 @@ export default function WorkspaceSidebar({ profile, threads, activeThreadId, onT
           >
             <span className={`thread-avatar ${thread.status}`}>{getInitials(thread.name)}</span>
             <span className="thread-meta">
-              <strong>{thread.name}</strong>
+              <strong>{thread.type === "direct" ? thread.name.replace(/^@/, "") : thread.name}</strong>
             </span>
-            {thread.unread > 0 && <span className="thread-badge">{thread.unread}</span>}
+            <span className="thread-actions" onClick={(event) => event.stopPropagation()}>
+              <button type="button" title="Закрепить" onClick={() => onPinThread(thread)}>{thread.isPinned ? "●" : "○"}</button>
+              {thread.isPinned && <button type="button" title="Выше" onClick={() => onMovePinned(thread, -1)} disabled={index === 0}>↑</button>}
+              {thread.unread > 0 && <span className="thread-badge">{thread.unread}</span>}
+            </span>
           </button>
         ))}
+      </div>
+
+      <div className="contacts-panel">
+        <div className="thread-section-title">Контакты</div>
+        <div className="workspace-search compact-search">
+          <span aria-hidden="true">@</span>
+          <input
+            type="search"
+            placeholder="Поиск по тегу"
+            value={contactsQuery}
+            onChange={(event) => onContactsQueryChange(event.target.value)}
+          />
+        </div>
+        <div className="contacts-list">
+          {(contacts || []).map((contact) => (
+            <button key={contact.id} type="button" className="contact-card">
+              <span className="contact-avatar">{getInitials(contact.name)}</span>
+              <span>
+                <strong>{contact.name}</strong>
+                <small>{contact.tag}</small>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </aside>
   );

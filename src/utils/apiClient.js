@@ -168,12 +168,64 @@ export function getChats(token) {
   });
 }
 
+
+export function getContacts(token, query = "") {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  const suffix = params.toString() ? `?${params}` : "";
+  return requestJson(`/api/chats/contacts${suffix}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function renameChat(chatId, title, token) {
+  return requestJson(`/api/chats/${chatId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function pinChat(chatId, pinned, pinOrder, token) {
+  return requestJson(`/api/chats/${chatId}/pin`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ pinned, pin_order: pinOrder }),
+  });
+}
+
 export function markChatRead(chatId, token) {
   return requestJson(`/api/chats/${chatId}/read`, {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function editChatMessage(messageId, body, token) {
+  return requestJson(`/api/chats/messages/${messageId}`, {
+    method: "PATCH",
     headers: {
+      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify({ encoded_body: encodeWireBody(body) }),
+  });
+}
+
+export function deleteChatMessage(messageId, scope, token) {
+  return requestJson(`/api/chats/messages/${messageId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ scope }),
   });
 }
 
