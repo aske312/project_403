@@ -5,7 +5,7 @@ import AuthForm from "../components/AuthForm";
 import AuthIntro from "../components/AuthIntro";
 import { config } from "../config/appConfig";
 import { getHealth, login, register } from "../utils/apiClient";
-import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
+import { normalizeEnvironment } from "../utils/environment";
 import { homeCopy } from "../utils/homeCopy";
 import {
   getNextLanguage,
@@ -15,7 +15,7 @@ import {
   storeLanguage,
   storeTheme,
 } from "../utils/themePreference";
-import { setAccessToken, useAuthSession } from "../utils/useAuthSession";
+import { getAccessToken, setAccessToken, useAuthSession } from "../utils/useAuthSession";
 import "../styles/home.css";
 
 function getValidationMessages(detail) {
@@ -53,7 +53,9 @@ export default function Home() {
   const [mode, setMode] = useState("login");
   const [status, setStatus] = useState("");
   const [projectName, setProjectName] = useState(config.app.project.defaultName);
-  const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.MODE);
+  const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.VITE_ENVIRONMENTS);
+  const [featureFlags, setFeatureFlags] = useState({});
+  const [onlineUsers, setOnlineUsers] = useState(null);
   const {
     profile,
     setProfile,
@@ -67,8 +69,9 @@ export default function Home() {
   const t = homeCopy[lang];
   const isRegister = mode === "register";
   const env = normalizeEnvironment(projectEnvironment);
-  const showAdminLink = canUseAdminPanel(profile, env);
+  const showAdminLink = Boolean(featureFlags.admin_panel);
   const visibleStatus = status || (sessionExpired ? t.sessionExpired : "");
+  const canViewOnlineUsers = Boolean(featureFlags.footer_online_counter);
 
   const handleModeChange = (nextMode) => {
     setMode(nextMode);
@@ -79,22 +82,26 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadProjectName() {
+    async function loadProjectStatus() {
       try {
-        const { payload } = await getHealth();
+        const { payload } = await getHealth(getAccessToken());
         if (!ignore && payload.app) {
           setProjectName(payload.app);
-          setProjectEnvironment(payload.environment || import.meta.env.MODE);
+          setProjectEnvironment(payload.environment || import.meta.env.VITE_ENVIRONMENTS);
+          setFeatureFlags(payload.feature_flags || {});
+          setOnlineUsers(payload.online_users);
         }
       } catch {
         if (!ignore) {
           setProjectName(config.app.project.defaultName);
-          setProjectEnvironment(import.meta.env.MODE);
+          setProjectEnvironment(import.meta.env.VITE_ENVIRONMENTS);
+          setFeatureFlags({});
+          setOnlineUsers(null);
         }
       }
     }
 
-    loadProjectName();
+    loadProjectStatus();
 
     return () => {
       ignore = true;
@@ -132,18 +139,19 @@ export default function Home() {
         return;
       }
 
-      if (isRegister) {
-        setProfile(null);
-        setAccountOpen(false);
-        setSessionExpired(false);
-        setStatus(t.emailConfirmationPending);
-        return;
-      }
-
       setAccessToken(result.access_token);
       setProfile(result.user);
+      setAccountOpen(false);
       setSessionExpired(false);
       setStatus("");
+
+      try {
+        const { payload } = await getHealth(result.access_token);
+        setFeatureFlags(payload.feature_flags || {});
+        setOnlineUsers(payload.online_users);
+      } catch {
+        setFeatureFlags({});
+      }
     } catch (error) {
       setStatus(error.message);
     }
@@ -182,9 +190,10 @@ export default function Home() {
 
       <AppFooter
         variant="auth"
-        statusLabel={env.label}
         statusState={env.state}
         version={import.meta.env.VITE_APP_VERSION}
+        onlineUsers={onlineUsers}
+        canViewOnlineUsers={canViewOnlineUsers}
         links={[
           { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
           { href: "https://vk.com/aske312", label: t.vk },

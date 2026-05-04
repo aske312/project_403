@@ -1,14 +1,27 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import process from 'node:process'
 import { execSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
-const appConfig = JSON.parse(readFileSync(new URL('./config/app.json', import.meta.url), 'utf-8'))
 const lock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf-8'))
 const requirements = readFileSync(new URL('./requirements.txt', import.meta.url), 'utf-8')
+const envFile = new URL('./.env', import.meta.url)
+
+if (!existsSync(envFile)) {
+  throw new Error('Settings file is missing. Create the project settings file before building frontend.')
+}
+
+function requireEnv(env, name) {
+  const value = env[name]
+  if (!value || !String(value).trim()) {
+    throw new Error(`Missing required settings parameter: ${name}`)
+  }
+
+  return value
+}
 
 function getRequirementVersion(name) {
   const normalizedName = name.toLowerCase()
@@ -65,7 +78,7 @@ function getProjectBranch(env) {
   }
 }
 
-function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch }) {
+function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch, projectEnvironment }) {
   const startedAt = performance.now()
   let startupMs = null
   let buildStartedAt = null
@@ -108,7 +121,7 @@ function frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBran
             branch: projectBranch,
             startup_ms: startupMs,
             build_ms: buildMs ?? startupMs,
-            mode: server.config.mode,
+            mode: projectEnvironment,
           }),
         )
       })
@@ -122,8 +135,15 @@ export default defineConfig(({ mode }) => {
   const projectBranch = getProjectBranch(env)
   const envBuildId = env.BUILD_ID && env.BUILD_ID.toLowerCase() !== 'dev' ? env.BUILD_ID : null
   const buildId = envBuildId ?? getGitShortSha()
-  const appVersion = `v ${appConfig.project.defaultVersion ?? pkg.version} build ${buildId}`
-  const appName = appConfig.project.defaultName
+  const appVersion = `v ${requireEnv(env, 'VERSION')} build ${buildId}`
+  const appName = requireEnv(env, 'APP_NAME')
+  const projectEnvironment = requireEnv(env, 'ENVIRONMENTS')
+  const apiUrl = requireEnv(env, 'VITE_API_URL')
+  const authTokenKey = requireEnv(env, 'VITE_AUTH_TOKEN_KEY')
+  const interfacePreferencesKey = requireEnv(env, 'VITE_INTERFACE_PREFERENCES_KEY')
+  const sessionExpiredKey = requireEnv(env, 'VITE_SESSION_EXPIRED_KEY')
+  const defaultTheme = requireEnv(env, 'VITE_DEFAULT_THEME')
+  const defaultLanguage = requireEnv(env, 'VITE_DEFAULT_LANGUAGE')
   const frontendStack = [
     formatDependency('JavaScript V8', process.versions.v8),
     formatDependency('Node.js', process.versions.node),
@@ -137,10 +157,18 @@ export default defineConfig(({ mode }) => {
   ].join(', ')
 
   return {
-    plugins: [react(), frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch })],
+    plugins: [react(), frontendMetricsPlugin({ appName, appVersion, frontendStack, projectBranch, projectEnvironment })],
     define: {
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+      'import.meta.env.VITE_APP_NAME': JSON.stringify(appName),
+      'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'import.meta.env.VITE_AUTH_TOKEN_KEY': JSON.stringify(authTokenKey),
+      'import.meta.env.VITE_INTERFACE_PREFERENCES_KEY': JSON.stringify(interfacePreferencesKey),
+      'import.meta.env.VITE_SESSION_EXPIRED_KEY': JSON.stringify(sessionExpiredKey),
+      'import.meta.env.VITE_DEFAULT_THEME': JSON.stringify(defaultTheme),
+      'import.meta.env.VITE_DEFAULT_LANGUAGE': JSON.stringify(defaultLanguage),
       'import.meta.env.VITE_PROJECT_BRANCH': JSON.stringify(projectBranch),
+      'import.meta.env.VITE_ENVIRONMENTS': JSON.stringify(projectEnvironment),
       'import.meta.env.VITE_FRONTEND_STACK': JSON.stringify(frontendStack),
       'import.meta.env.VITE_BACKEND_STACK': JSON.stringify(backendStack),
     },

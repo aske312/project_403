@@ -2,7 +2,7 @@
   "forms": {
     "login": {
       "login": {
-        "placeholder": "user_403",
+        "placeholder": "user@example.ru",
         "minLength": 3,
         "maxLength": 255,
         "allowedCharacters": "A-Z a-z 0-9 _ @ . + -",

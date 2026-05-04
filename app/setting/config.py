@@ -1,53 +1,124 @@
 from dotenv import load_dotenv
-import json
+import csv
 import subprocess
 import os
 import sys
 from pathlib import Path
 from urllib.parse import quote_plus
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+if not ENV_FILE.exists():
+    raise RuntimeError("Settings file is missing. Create the project settings file before starting the app.")
+
+load_dotenv(dotenv_path=ENV_FILE, override=True)
+
+DEFAULT_JWT_SECRET = "change_me_before_public_deploy"
+PRODUCTION_ENVIRONMENTS = {"prod", "production"}
+DEV_ENVIRONMENTS = {"dev", "development", "local"}
 
 
-def read_app_config():
-    config_path = Path(__file__).resolve().parents[2] / "config" / "app.json"
-    try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-APP_CONFIG = read_app_config()
-
-
-def config_value(*path, default=None):
-    value = APP_CONFIG
-    for key in path:
-        if not isinstance(value, dict):
-            return default
-        value = value.get(key)
-        if value is None:
-            return default
-    return value
-
-
-def get_bool_env(name, default=False):
+def get_bool_env(name):
     value = os.getenv(name)
-    if value is None:
-        return default
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Missing required settings parameter: {name}")
 
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_str_env(name):
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Missing required settings parameter: {name}")
+    return value.strip()
+
+
+def get_optional_str_env(name, default=None):
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return value.strip()
+
+
+def get_int_env(name):
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Missing required settings parameter: {name}")
+    return int(value)
+
+
+def get_list_env(name):
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        raise RuntimeError(f"Missing required settings parameter: {name}")
+
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def get_required_env(name):
     value = os.getenv(name)
     if value is None or value.strip() == "":
-        raise RuntimeError(f"Missing required environment variable: {name}")
+        raise RuntimeError(f"Missing required settings parameter: {name}")
     return value.strip()
 
 
+def parse_feature_flag_audience(feature_name, environment_name, raw_audience):
+    raw_audience = raw_audience.strip().lower()
+    if not raw_audience:
+        raise RuntimeError(
+            f"Invalid feature flag audience for {feature_name}/{environment_name}."
+        )
+
+    if raw_audience == "off":
+        return []
+
+    audience_groups = []
+    for raw_group in raw_audience.split("|"):
+        group = [item.strip() for item in raw_group.split("+") if item.strip()]
+        if not group:
+            raise RuntimeError(
+                f"Invalid feature flag audience for {feature_name}/{environment_name}."
+            )
+        audience_groups.append(group)
+
+    return audience_groups
+
+
+def read_feature_flags_table(path):
+    flags = {}
+    feature_flags_path = (ENV_FILE.parent / path).resolve()
+
+    if not feature_flags_path.exists():
+        raise RuntimeError("Feature flag table is missing.")
+
+    with feature_flags_path.open(newline="", encoding="utf-8") as file:
+        rows = csv.DictReader(
+            row for row in file if row.strip() and not row.lstrip().startswith("#")
+        )
+        required_columns = {"feature", "environment", "audience"}
+        if not rows.fieldnames or not required_columns.issubset(rows.fieldnames):
+            raise RuntimeError(
+                "Feature flag table must contain feature, environment and audience columns."
+            )
+
+        for row in rows:
+            feature_name = row["feature"].strip()
+            environment_name = row["environment"].strip().lower() or "*"
+            raw_audience = row["audience"].strip()
+
+            if not feature_name:
+                raise RuntimeError("Feature flag table contains an empty feature name.")
+
+            flags.setdefault(feature_name, {})[environment_name] = parse_feature_flag_audience(
+                feature_name,
+                environment_name,
+                raw_audience,
+            )
+
+    return flags
+
+
 def build_database_url():
-    driver = config_value("database", "driver", default="postgresql+asyncpg")
+    driver = get_str_env("DATABASE_DRIVER")
     user = quote_plus(get_required_env("DB_USER"))
     password = quote_plus(get_required_env("DB_PASSWORD"))
     host = get_required_env("DB_HOST")
@@ -57,7 +128,7 @@ def build_database_url():
 
 
 def get_build_id():
-    build_id = os.getenv("BUILD_ID")
+    build_id = get_str_env("BUILD_ID")
     if build_id and build_id.lower() != "dev":
         return build_id
 
@@ -71,23 +142,54 @@ def get_build_id():
 
 
 def get_project_branch():
-    branch = os.getenv("PROJECT_BRANCH") or os.getenv("GIT_BRANCH") or os.getenv("BRANCH")
-    if branch:
-        return branch
+    return get_str_env("PROJECT_BRANCH")
 
-    try:
-        return subprocess.check_output(
-            ["git", "branch", "--show-current"],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip() or "detached"
-    except Exception:
-        return "unknown"
+
+def is_production_environment(value):
+    return str(value or "").strip().lower() in PRODUCTION_ENVIRONMENTS
+
+
+def is_dev_environment_name(value):
+    return str(value or "").strip().lower() in DEV_ENVIRONMENTS
+
+
+def mode_debug_enabled(value):
+    return not is_production_environment(value)
+
+
+def mode_auto_create_tables_enabled(value):
+    return not is_production_environment(value)
+
+
+def mode_admin_commands_enabled(value):
+    return is_dev_environment_name(value)
+
+
+def validate_production_config(settings):
+    if not is_production_environment(settings.ENVIRONMENTS):
+        return
+
+    errors = []
+
+    if settings.DATABASE_URL.startswith("sqlite"):
+        errors.append("Database connection must not use SQLite in production.")
+
+    jwt_secret = settings.JWT_SECRET.strip()
+    if jwt_secret == DEFAULT_JWT_SECRET:
+        errors.append("JWT_SECRET must be changed from the development default.")
+    if len(jwt_secret) < 32:
+        errors.append("JWT_SECRET must be at least 32 characters in production.")
+
+    if errors:
+        details = "\n- ".join(errors)
+        raise RuntimeError(f"Production configuration is not safe:\n- {details}")
 
 
 class Parameters:
     # App
-    APP_NAME = config_value("project", "defaultName", default="Project_403")
-    VERSION = f"v {config_value('project', 'defaultVersion', default='0.0.1')} build {get_build_id()}"
+    APP_NAME = get_str_env("APP_NAME")
+    APP_VERSION = get_str_env("VERSION")
+    VERSION = f"v {APP_VERSION} build {get_build_id()}"
     STARTUP_DURATION_MS = None
     DATABASE_STARTUP_DURATION_MS = None
     BUILD_DURATION_MS = (
@@ -95,54 +197,90 @@ class Parameters:
         if os.getenv("BUILD_DURATION_MS")
         else None
     )
-    RUNTIME_STATE_FILE = config_value("runtime", "stateFile", default="logs/runtime-state.json")
-    RUNTIME_HEARTBEAT_SECONDS = max(int(config_value("runtime", "heartbeatSeconds", default=10)), 1)
-    ADMIN_COMMAND_FILE = config_value("runtime", "adminCommandFile", default="logs/admin-command.json")
-    ADMIN_COMMAND_TTL_SECONDS = max(int(config_value("runtime", "adminCommandTtlSeconds", default=30)), 5)
+    RUNTIME_STATE_FILE = get_str_env(
+        "RUNTIME_STATE_FILE"
+    )
+    RUNTIME_HEARTBEAT_SECONDS = max(
+        get_int_env("RUNTIME_HEARTBEAT_SECONDS"),
+        1,
+    )
+    ADMIN_COMMAND_FILE = get_str_env(
+        "ADMIN_COMMAND_FILE"
+    )
+    ADMIN_COMMAND_TTL_SECONDS = max(
+        get_int_env("ADMIN_COMMAND_TTL_SECONDS"),
+        5,
+    )
     PROJECT_BRANCH = get_project_branch()
     PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    ENV = config_value("project", "environment", default="development")
-    DEBUG = bool(config_value("project", "debug", default=False))
-    AUTO_CREATE_TABLES = bool(config_value("project", "autoCreateTables", default=True))
+    ENVIRONMENTS = get_str_env("ENVIRONMENTS")
+    DEBUG = mode_debug_enabled(ENVIRONMENTS)
+    AUTO_CREATE_TABLES = mode_auto_create_tables_enabled(ENVIRONMENTS)
+    FEATURE_FLAGS_FILE = get_str_env("FEATURE_FLAGS_FILE")
+    FEATURE_FLAGS = read_feature_flags_table(FEATURE_FLAGS_FILE)
 
     # Logging
-    LOG_FILE = config_value("logging", "file", default="logs/app.log")
-    LOG_DIR = config_value("logging", "directory", default="logs")
-    LOG_MAX_BYTES = int(config_value("logging", "maxBytes", default=1024 * 1024))
-    LOG_BACKUP_COUNT = int(config_value("logging", "backupCount", default=3))
+    LOG_FILE = get_str_env("LOG_FILE")
+    LOG_DIR = get_str_env("LOG_DIR")
+    LOG_MAX_BYTES = get_int_env("LOG_MAX_BYTES")
+    LOG_BACKUP_COUNT = get_int_env("LOG_BACKUP_COUNT")
 
     # Server
-    HOST = config_value("server", "host", default="0.0.0.0")
-    PORT = int(config_value("server", "port", default=8000))
-    CORS_ORIGINS = config_value("server", "corsOrigins", default=["http://localhost:5173", "http://127.0.0.1:5173"])
+    HOST = get_str_env("HOST")
+    PORT = get_int_env("PORT")
+    FRONTEND_HOST = get_str_env("FRONTEND_HOST")
+    FRONTEND_PORT = get_int_env("FRONTEND_PORT")
+    CORS_ORIGINS = get_list_env("CORS_ORIGINS")
 
     # Database
     DATABASE_URL = build_database_url()
-    DB_FALLBACK_URL = config_value("database", "fallbackUrl", default="sqlite+aiosqlite:///./local.db")
-    DB_FALLBACK_ENABLED = bool(config_value("database", "fallbackEnabled", default=True))
+    DB_FALLBACK_URL = get_str_env(
+        "DB_FALLBACK_URL"
+    )
+    DB_FALLBACK_ENABLED = get_bool_env(
+        "DB_FALLBACK_ENABLED"
+    )
 
     # Auth
-    JWT_SECRET = os.getenv("JWT_SECRET", "change_me_before_public_deploy")
-    JWT_ALGORITHM = config_value("auth", "jwtAlgorithm", default="HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(config_value("auth", "accessTokenExpireMinutes", default=60 * 24 * 30))
-    AUTH_RATE_LIMIT_WINDOW_SECONDS = max(int(config_value("auth", "rateLimitWindowSeconds", default=60)), 1)
-    AUTH_LOGIN_RATE_LIMIT_ATTEMPTS = max(int(config_value("auth", "loginRateLimitAttempts", default=5)), 1)
-    AUTH_REGISTER_RATE_LIMIT_ATTEMPTS = max(int(config_value("auth", "registerRateLimitAttempts", default=3)), 1)
+    JWT_SECRET = get_str_env("JWT_SECRET")
+    JWT_ALGORITHM = get_str_env("JWT_ALGORITHM")
+    ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env(
+        "ACCESS_TOKEN_EXPIRE_MINUTES"
+    )
+    AUTH_RATE_LIMIT_WINDOW_SECONDS = max(
+        get_int_env("AUTH_RATE_LIMIT_WINDOW_SECONDS"),
+        1,
+    )
+    AUTH_LOGIN_RATE_LIMIT_ATTEMPTS = max(
+        get_int_env("AUTH_LOGIN_RATE_LIMIT_ATTEMPTS"),
+        1,
+    )
+    AUTH_REGISTER_RATE_LIMIT_ATTEMPTS = max(
+        get_int_env("AUTH_REGISTER_RATE_LIMIT_ATTEMPTS"),
+        1,
+    )
 
     # DEV access seed
-    DEV_SUPERUSER_ENABLED = True
-    DEV_SUPERUSER_EMAIL = "supervisor@project403.local"
-    DEV_SUPERUSER_HANDLE = os.getenv("DEV_SUPERUSER_HANDLE", "supervisor")
-    DEV_SUPERUSER_FIRST_NAME = "Supervisor"
-    DEV_SUPERUSER_LAST_NAME = ""
-    DEV_SUPERUSER_PASSWORD = os.getenv("DEV_SUPERUSER_PASSWORD", "Supervisor403")
+    ADMIN_COMMANDS_ENABLED = mode_admin_commands_enabled(ENVIRONMENTS)
 
-    DEV_USER_ENABLED = True
-    DEV_USER_EMAIL = "user@project403.local"
-    DEV_USER_HANDLE = os.getenv("DEV_USER_HANDLE", "demo_user")
-    DEV_USER_FIRST_NAME = "Demo"
-    DEV_USER_LAST_NAME = "User"
-    DEV_USER_PASSWORD = os.getenv("DEV_USER_PASSWORD", "User403pass")
+    DEV_SUPERUSER_ENABLED = get_bool_env(
+        "DEV_SUPERUSER_ENABLED"
+    )
+    DEV_SUPERUSER_EMAIL = get_str_env("DEV_SUPERUSER_EMAIL")
+    DEV_SUPERUSER_HANDLE = get_str_env("DEV_SUPERUSER_HANDLE")
+    DEV_SUPERUSER_FIRST_NAME = get_str_env("DEV_SUPERUSER_FIRST_NAME")
+    DEV_SUPERUSER_LAST_NAME = get_optional_str_env("DEV_SUPERUSER_LAST_NAME", "")
+    DEV_SUPERUSER_PASSWORD = get_str_env("DEV_SUPERUSER_PASSWORD")
+
+    DEV_USER_ENABLED = get_bool_env(
+        "DEV_USER_ENABLED"
+    )
+    DEV_USER_EMAIL = get_str_env("DEV_USER_EMAIL")
+    DEV_USER_HANDLE = get_str_env("DEV_USER_HANDLE")
+    DEV_USER_FIRST_NAME = get_str_env("DEV_USER_FIRST_NAME")
+    DEV_USER_LAST_NAME = get_str_env("DEV_USER_LAST_NAME")
+    DEV_USER_PASSWORD = get_str_env("DEV_USER_PASSWORD")
 
 parameters = Parameters()
+validate_production_config(parameters)
 

@@ -8,8 +8,8 @@ import AdminServiceOverview from "../components/AdminServiceOverview";
 import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
 import {
-  API_URL,
   checkDatabase,
+  downloadLog,
   getFrontendMetrics,
   getHealth,
   getLogs,
@@ -23,7 +23,7 @@ import {
   buildServiceRows,
   fallbackEndpoints,
 } from "../utils/adminData";
-import { canUseAdminPanel, normalizeEnvironment } from "../utils/environment";
+import { normalizeEnvironment } from "../utils/environment";
 import { getFrontendPerformanceMetrics } from "../utils/performanceMetrics";
 import {
   getNextLanguage,
@@ -41,6 +41,7 @@ const LOG_PAGE_SIZE = 10;
 export default function Admin() {
   const [theme, setTheme] = useState(getStoredTheme);
   const [lang, setLang] = useState(getStoredLanguage);
+  const [compactViewport, setCompactViewport] = useState(false);
   const [endpoints, setEndpoints] = useState(fallbackEndpoints);
   const [frontend, setFrontend] = useState(null);
   const [backend, setBackend] = useState(null);
@@ -73,8 +74,14 @@ export default function Admin() {
   const t = adminCopy[lang];
   const projectName = backend?.app || config.app.project.defaultName;
   const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
-  const adminAccessAllowed = canUseAdminPanel(profile, env);
+  const featureFlags = backend?.feature_flags || {};
+  const adminAccessAllowed = Boolean(featureFlags.admin_panel);
   const accessReady = Boolean(backend) && profileLoaded;
+  const adminServicesVisible = Boolean(featureFlags.admin_services);
+  const adminApiVisible = Boolean(featureFlags.admin_api);
+  const adminLogsVisible = Boolean(featureFlags.admin_logs);
+  const adminCommandsVisible = Boolean(featureFlags.admin_commands);
+  const canViewOnlineUsers = Boolean(featureFlags.footer_online_counter);
 
   const setServiceLoading = useCallback((serviceId, loading) => {
     setLoadingServices((current) => ({
@@ -105,7 +112,7 @@ export default function Admin() {
     setServiceLoading("backend", true);
 
     try {
-      const { payload, durationMs } = await getHealth();
+      const { payload, durationMs } = await getHealth(getAccessToken());
       setBackend({ ...payload, latency_ms: durationMs });
     } catch (error) {
       setBackend({ status: "error", error: error.message });
@@ -131,7 +138,7 @@ export default function Admin() {
     setServiceLoading("database", true);
 
     try {
-      const { payload, durationMs } = await checkDatabase();
+      const { payload, durationMs } = await checkDatabase(getAccessToken());
       setDatabase({
         ...payload,
         request_latency_ms: durationMs,
@@ -146,7 +153,7 @@ export default function Admin() {
 
   const loadLogsPage = useCallback(async (page = logPage) => {
     try {
-      const { payload } = await getLogs(page, LOG_PAGE_SIZE);
+      const { payload } = await getLogs(page, LOG_PAGE_SIZE, getAccessToken());
       const nextLogs = payload.logs || [];
       const nextPage = payload.page ?? 1;
       const nextTotalPages = Math.max(payload.total_pages ?? 1, 1);
@@ -194,17 +201,28 @@ export default function Admin() {
     if (!accessReady || !adminAccessAllowed) return undefined;
 
     const timeoutId = window.setTimeout(() => {
-      loadOpenApi();
-      loadDatabase();
+      if (adminApiVisible) {
+        loadOpenApi();
+      }
+      if (adminServicesVisible) {
+        loadDatabase();
+      }
     }, 0);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [accessReady, adminAccessAllowed, loadDatabase, loadOpenApi]);
+  }, [
+    accessReady,
+    adminAccessAllowed,
+    adminApiVisible,
+    adminServicesVisible,
+    loadDatabase,
+    loadOpenApi,
+  ]);
 
   useEffect(() => {
-    if (!accessReady || !adminAccessAllowed) return undefined;
+    if (!accessReady || !adminAccessAllowed || !adminLogsVisible) return undefined;
 
     const timeoutId = window.setTimeout(() => {
       loadLogsPage(logPage);
@@ -213,7 +231,22 @@ export default function Admin() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [accessReady, adminAccessAllowed, loadLogsPage, logPage]);
+  }, [accessReady, adminAccessAllowed, adminLogsVisible, loadLogsPage, logPage]);
+
+  useEffect(() => {
+    function updateViewportMode() {
+      const widthDelta = Math.max(window.outerWidth - window.innerWidth, 0);
+      const heightDelta = Math.max(window.outerHeight - window.innerHeight, 0);
+      setCompactViewport(widthDelta > 180 || heightDelta > 180);
+    }
+
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportMode);
+    };
+  }, []);
 
   async function runRestartCommand(commandId) {
     if (!window.confirm(t.commandConfirmRestart)) {
@@ -254,10 +287,30 @@ export default function Admin() {
     setRefreshingServices(true);
 
     try {
-      await Promise.all([loadFrontend(), loadBackend(), loadDatabase()]);
+      const refreshTasks = [loadFrontend(), loadBackend()];
+      if (adminServicesVisible) {
+        refreshTasks.push(loadDatabase());
+      }
+      await Promise.all(refreshTasks);
     } finally {
       setRefreshingServices(false);
     }
+  }
+
+  async function handleDownloadLog(log) {
+    const { response, payload } = await downloadLog(log.download_url, getAccessToken());
+    if (!response.ok) {
+      throw new Error(response.statusText || "Log download failed.");
+    }
+
+    const url = window.URL.createObjectURL(payload);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = log.file;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   }
 
   const restartOptions = [
@@ -288,7 +341,7 @@ export default function Admin() {
   }
 
   return (
-    <div className={`admin-page ${theme}`}>
+    <div className={`admin-page ${theme}${compactViewport ? " compact-viewport" : ""}`}>
       <AppHeader
         variant="admin"
         projectName={projectName}
@@ -310,45 +363,52 @@ export default function Admin() {
         <AdminAccessPanel t={t} env={env} backend={backend} />
       ) : (
         <main className="admin-layout">
-          <AdminServiceOverview
-            t={t}
-            env={env}
-            backend={backend}
-            frontend={frontend}
-            database={database}
-            serviceRows={serviceRows}
-            onRefresh={refreshServices}
-            refreshing={refreshingServices}
-          >
-            <AdminCommandsSection
+          {adminServicesVisible && (
+            <AdminServiceOverview
               t={t}
-              feedback={commandFeedback}
-              restartOptions={restartOptions}
-              restartBusy={commandBusy}
-              onRestart={runRestartCommand}
+              env={env}
+              backend={backend}
+              frontend={frontend}
+              database={database}
+              serviceRows={serviceRows}
+              onRefresh={refreshServices}
+              refreshing={refreshingServices}
+            >
+              {adminCommandsVisible && (
+                <AdminCommandsSection
+                  t={t}
+                  feedback={commandFeedback}
+                  restartOptions={restartOptions}
+                  restartBusy={commandBusy}
+                  onRestart={runRestartCommand}
+                />
+              )}
+            </AdminServiceOverview>
+          )}
+          {adminApiVisible && <AdminApiSection t={t} endpoints={endpoints} />}
+          {adminLogsVisible && (
+            <AdminLogsSection
+              t={t}
+              logs={logs}
+              page={logMeta.page}
+              pageSize={logMeta.pageSize}
+              total={logMeta.total}
+              totalPages={logMeta.totalPages}
+              onPageChange={setLogPage}
+              onRefresh={refreshLogs}
+              onDownload={handleDownloadLog}
+              refreshing={refreshingLogs}
             />
-          </AdminServiceOverview>
-          <AdminApiSection t={t} endpoints={endpoints} />
-          <AdminLogsSection
-            t={t}
-            logs={logs}
-            apiUrl={API_URL}
-            page={logMeta.page}
-            pageSize={logMeta.pageSize}
-            total={logMeta.total}
-            totalPages={logMeta.totalPages}
-            onPageChange={setLogPage}
-            onRefresh={refreshLogs}
-            refreshing={refreshingLogs}
-          />
+          )}
         </main>
       )}
 
       <AppFooter
         variant="admin"
-        statusLabel={env.label}
         statusState={env.state}
         version={backend?.version || import.meta.env.VITE_APP_VERSION}
+        onlineUsers={backend?.online_users}
+        canViewOnlineUsers={canViewOnlineUsers}
         links={[
           { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
           { href: "https://vk.com/aske312", label: t.vk },

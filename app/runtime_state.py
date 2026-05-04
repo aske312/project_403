@@ -12,6 +12,8 @@ state_lock = threading.Lock()
 session_started_at = None
 session_started_wall_time = None
 launch_count = 0
+online_users = {}
+ONLINE_USER_TTL_SECONDS = 120
 
 
 def get_state_path():
@@ -92,6 +94,26 @@ def stop_runtime_session():
         session_started_at = None
         session_started_wall_time = None
         persist_runtime_state(closed=True)
+
+
+def mark_user_online(user_id):
+    with state_lock:
+        online_users[str(user_id)] = time.time()
+
+
+def get_online_user_count():
+    now = time.time()
+
+    with state_lock:
+        expired_user_ids = [
+            user_id
+            for user_id, seen_at in online_users.items()
+            if now - seen_at > ONLINE_USER_TTL_SECONDS
+        ]
+        for user_id in expired_user_ids:
+            online_users.pop(user_id, None)
+
+        return len(online_users)
 
 
 def get_runtime_metrics():

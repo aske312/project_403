@@ -297,6 +297,13 @@
   gap: 12px;
 }
 
+.app-footer-online {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .app-footer-version {
   padding-left: 12px;
   border-left: 1px solid var(--border);

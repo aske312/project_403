@@ -1,12 +1,24 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 import time
 
+from app.api.auth.login import get_current_user
 from app.db import session
-from app.db.models import Base
+from app.db.models import Base, User
+from app.feature_flags import is_feature_enabled
 from app.setting.config import parameters as param
 
 router = APIRouter()
+
+
+async def require_admin_services_user(current_user: User = Depends(get_current_user)):
+    if not is_feature_enabled("admin_services", current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin services access is disabled by feature policy.",
+        )
+
+    return current_user
 
 
 async def get_database_version(conn):
@@ -24,7 +36,7 @@ async def get_database_version(conn):
 
 
 @router.get("/api/db/check_connect")
-async def check_connect():
+async def check_connect(current_user: User = Depends(require_admin_services_user)):
     started = time.perf_counter()
 
     try:
@@ -55,7 +67,7 @@ async def check_connect():
 
 
 @router.post("/api/db/init")
-async def initialize_database():
+async def initialize_database(current_user: User = Depends(require_admin_services_user)):
     try:
         await session.init_db()
 

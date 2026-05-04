@@ -131,6 +131,41 @@ button {
   padding: 22px 0 30px;
 }
 
+.admin-page.compact-viewport .admin-layout {
+  width: min(100% - 24px, 980px);
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.admin-page.compact-viewport .service-hero,
+.admin-page.compact-viewport .access-panel {
+  grid-template-columns: 1fr;
+  padding: 18px;
+}
+
+.admin-page.compact-viewport .services-section,
+.admin-page.compact-viewport .commands-section,
+.admin-page.compact-viewport .api-section,
+.admin-page.compact-viewport .logs-section {
+  padding: 14px;
+}
+
+.admin-page.compact-viewport .service-table-head,
+.admin-page.compact-viewport .service-row {
+  grid-template-columns: minmax(120px, 0.75fr) minmax(180px, 1.25fr) minmax(82px, 0.55fr) minmax(96px, 0.6fr);
+  gap: 10px;
+  padding-inline: 12px;
+}
+
+.admin-page.compact-viewport .section-head {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-page.compact-viewport .json {
+  max-height: 220px;
+}
+
 .service-hero,
 .access-panel,
 .services-section,
@@ -855,7 +890,8 @@ button {
   font-weight: 700;
 }
 
-.log-row a {
+.log-row a,
+.log-row button {
   min-height: 34px;
   display: inline-flex;
   align-items: center;
@@ -867,9 +903,11 @@ button {
   font-size: 12px;
   font-weight: 900;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.log-row a:hover {
+.log-row a:hover,
+.log-row button:hover {
   border-color: var(--neutral);
   background: var(--surface-muted);
 }

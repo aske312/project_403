@@ -1,0 +1,9 @@
+feature,environment,audience,description
+admin_panel,,admins,Доступ к админской панели.
+admin_services,,admins,Блок состояния backend frontend и базы данных в админке.
+admin_api,DEV,admins,Блок API эндпоинтов в админке.
+admin_logs,,admins,Блок просмотра логов приложения в админке.
+admin_commands,DEV,admins,Серверные команды рестарта из админки.
+footer_online_counter,DEV,all,Счетчик авторизованных пользователей онлайн в футере для DEV.
+footer_online_counter,PROD,super_admins,Счетчик авторизованных пользователей онлайн в футере для PROD только суперпользователю.
+,,

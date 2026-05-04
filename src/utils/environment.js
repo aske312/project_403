@@ -6,6 +6,8 @@ const envStates = {
   dev: "dev",
   development: "dev",
   local: "dev",
+  prod: "active",
+  production: "active",
   close: "close",
   closed: "close",
 };
@@ -20,13 +22,16 @@ export function normalizeEnvironment(value) {
   };
 }
 
-export function canUseAdminPanel(profile, environment) {
-  const role = String(profile?.role || "").trim().toLowerCase();
+export function hasSuperAdminPermission(profile) {
   const permissions = Array.isArray(profile?.permissions)
     ? profile.permissions.map((permission) => String(permission).trim().toLowerCase())
     : [];
-  const hasSuperAdminPermission =
-    Boolean(profile?.is_super_admin) || permissions.includes("super_admin");
 
-  return hasSuperAdminPermission && role === "owner" && environment.state === "dev";
+  return Boolean(profile?.is_super_admin) || permissions.includes("super_admin");
+}
+
+export function canUseAdminPanel(profile, environment) {
+  const role = String(profile?.role || "").trim().toLowerCase();
+
+  return hasSuperAdminPermission(profile) && role === "owner" && ["active", "dev"].includes(environment.state);
 }

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
+from app.runtime_state import mark_user_online
 from app.setting.config import parameters as param
 
 router = APIRouter()
@@ -114,6 +115,34 @@ async def get_current_user(
         logger.info("Auth rejected: user not found id=%s", user_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
 
+    mark_user_online(user.id)
+    return user
+
+
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_session),
+):
+    if not credentials:
+        return None
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            param.JWT_SECRET,
+            algorithms=[param.JWT_ALGORITHM],
+        )
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        logger.info("Optional auth ignored: invalid token")
+        return None
+
+    user = await db.get(User, user_id)
+    if not user:
+        logger.info("Optional auth ignored: user not found id=%s", user_id)
+        return None
+
+    mark_user_online(user.id)
     return user
 
 
@@ -146,6 +175,7 @@ async def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login or password.")
 
     reset_rate_limit(rate_limit_key)
+    mark_user_online(user.id)
     logger.info("User logged in: id=%s email=%s", user.id, user.email)
     return TokenResponse(
         access_token=create_access_token(user),

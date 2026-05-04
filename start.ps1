@@ -12,14 +12,14 @@ param(
     [switch]$ForceInstall,
     [switch]$ForceBuild,
     [switch]$StopOnly,
-    [switch]$NoReplaceExisting,
-    [string]$BackendHost = "127.0.0.1",
-    [int]$BackendPort = 8000,
-    [string]$FrontendHost = "127.0.0.1",
-    [int]$FrontendPort = 5173
+    [switch]$NoReplaceExisting
 )
 
 $ErrorActionPreference = "Stop"
+$BackendHost = "127.0.0.1"
+$BackendPort = 8000
+$FrontendHost = "127.0.0.1"
+$FrontendPort = 5173
 
 function Write-Step {
     param([string]$Message)
@@ -30,6 +30,49 @@ function Write-Step {
 function Test-Command {
     param([string]$Name)
     $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Read-DotEnvSettings {
+    param([string]$Path = ".env")
+
+    $settings = @{}
+    if (-not (Test-Path $Path)) {
+        return $settings
+    }
+
+    foreach ($line in Get-Content -Path $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) {
+            continue
+        }
+
+        $separator = $trimmed.IndexOf("=")
+        if ($separator -le 0) {
+            continue
+        }
+
+        $key = $trimmed.Substring(0, $separator).Trim()
+        $value = $trimmed.Substring($separator + 1).Trim().Trim('"').Trim("'")
+        $settings[$key] = $value
+    }
+
+    return $settings
+}
+
+function Get-DotEnvValue {
+    param(
+        [hashtable]$Settings,
+        [string[]]$Names,
+        [string]$Default
+    )
+
+    foreach ($name in $Names) {
+        if ($Settings.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace($Settings[$name])) {
+            return $Settings[$name]
+        }
+    }
+
+    return $Default
 }
 
 function Get-ChildProcessIds {
@@ -439,74 +482,7 @@ function Ensure-EnvFile {
         return
     }
 
-    Write-Step "Creating default .env"
-    $apiUrl = "http://$BackendHost`:$BackendPort"
-    $projectBranch = "unknown"
-    try {
-        $detectedBranch = git branch --show-current 2>$null
-        if ($detectedBranch) {
-            $projectBranch = $detectedBranch.Trim()
-        }
-    } catch {
-        $projectBranch = "unknown"
-    }
-    $envContent = @"
-# APPLICATION
-APP_NAME=Project_403
-VERSION=0.0.1
-ENV=development
-DEBUG=True
-AUTO_CREATE_TABLES=True
-
-# SERVER
-HOST=0.0.0.0
-PORT=$BackendPort
-
-# DATABASE
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
-DB_FALLBACK_ENABLED=True
-DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
-
-# AUTH
-JWT_SECRET=change_me_before_public_deploy
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-AUTH_RATE_LIMIT_WINDOW_SECONDS=60
-AUTH_LOGIN_RATE_LIMIT_ATTEMPTS=5
-AUTH_REGISTER_RATE_LIMIT_ATTEMPTS=3
-
-# DEV ACCOUNTS
-DEV_SUPERUSER_ENABLED=True
-DEV_SUPERUSER_EMAIL=supervisor@project403.local
-DEV_SUPERUSER_HANDLE=supervisor
-DEV_SUPERUSER_FIRST_NAME=Supervisor
-DEV_SUPERUSER_LAST_NAME=
-DEV_SUPERUSER_PASSWORD=Supervisor403
-
-DEV_USER_ENABLED=True
-DEV_USER_EMAIL=user@project403.local
-DEV_USER_HANDLE=demo_user
-DEV_USER_FIRST_NAME=Demo
-DEV_USER_LAST_NAME=User
-DEV_USER_PASSWORD=User403pass
-
-# BUILD
-PROJECT_BRANCH=$projectBranch
-
-# LOGGING
-LOG_DIR=logs
-LOG_FILE=logs/app.log
-LOG_MAX_BYTES=1048576
-LOG_BACKUP_COUNT=3
-
-# ADMIN
-ADMIN_COMMAND_FILE=logs/admin-command.json
-ADMIN_COMMAND_TTL_SECONDS=30
-
-# UI_API
-VITE_API_URL=$apiUrl
-"@
-    Set-Content -Path ".env" -Value $envContent -Encoding UTF8
+    throw "Settings file is missing. Create the project settings file before starting the app."
 }
 
 function Invoke-Checked {
@@ -585,6 +561,14 @@ if (-not $StopOnly) {
 }
 Enter-OrCloneProject
 
+Ensure-EnvFile
+
+$envSettings = Read-DotEnvSettings
+$BackendHost = Get-DotEnvValue $envSettings @("HOST") $BackendHost
+$BackendPort = [int](Get-DotEnvValue $envSettings @("PORT") "$BackendPort")
+$FrontendHost = Get-DotEnvValue $envSettings @("FRONTEND_HOST") $FrontendHost
+$FrontendPort = [int](Get-DotEnvValue $envSettings @("FRONTEND_PORT") "$FrontendPort")
+
 if ($StopOnly) {
     Stop-ExistingProjectProcesses "Stopping project processes"
     Write-Step "Project processes are stopped"
@@ -610,8 +594,6 @@ if ($UpdateRepo) {
     Write-Step "Updating repository"
     Invoke-Checked "git" @("pull", "--ff-only")
 }
-
-Ensure-EnvFile
 
 if ($StartDb -or $DbOnly) {
     Start-Database
@@ -675,7 +657,8 @@ if (-not $NoReplaceExisting) {
 }
 
 $startedProcessIds = @{}
-$adminCommandFile = Join-Path $Root "logs\admin-command.json"
+$adminCommandPathFromEnv = Get-DotEnvValue $envSettings @("ADMIN_COMMAND_FILE") "logs/admin-command.json"
+$adminCommandFile = Join-Path $Root $adminCommandPathFromEnv
 $adminCommandArchiveDir = Join-Path $Root "logs\admin-commands"
 
 $backendArgs = @(

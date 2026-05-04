@@ -11,11 +11,11 @@ from app.admin_commands import (
     queue_admin_command,
     read_admin_command_state,
 )
-from app.api.auth.login import get_current_user
+from app.api.auth.login import get_current_user, get_optional_current_user
 from app.db.models import User
-from app.db.session import is_dev_environment
+from app.feature_flags import get_feature_flags, is_feature_enabled
 from app.logging_config import get_log_root
-from app.runtime_state import get_runtime_metrics
+from app.runtime_state import get_online_user_count, get_runtime_metrics
 from app.setting.config import parameters as param
 
 router = APIRouter()
@@ -31,20 +31,30 @@ def get_package_stack(package_name):
 
 
 async def require_admin_user(current_user: User = Depends(get_current_user)):
-    is_owner = str(current_user.role or "").strip().lower() == "owner"
-    if not current_user.is_super_admin or not is_owner or not is_dev_environment():
+    if not is_feature_enabled("admin_commands", current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin command access requires DEV environment, owner role and super admin permission.",
+            detail="Admin command access is disabled by feature policy.",
+        )
+
+    return current_user
+
+
+async def require_admin_logs_user(current_user: User = Depends(get_current_user)):
+    if not is_feature_enabled("admin_logs", current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin logs access is disabled by feature policy.",
         )
 
     return current_user
 
 
 @router.get("/api/admin/health")
-def health():
+async def health(current_user: User | None = Depends(get_optional_current_user)):
     stack = get_package_stack("fastapi")
     runtime = get_runtime_metrics()
+    feature_flags = get_feature_flags(current_user)
 
     return {
         "status": "ok",
@@ -59,13 +69,16 @@ def health():
         "total_runtime_ms": runtime["total_runtime_ms"],
         "current_runtime_ms": runtime["current_runtime_ms"],
         "launch_count": runtime["launch_count"],
+        "online_users": get_online_user_count(),
         "branch": param.PROJECT_BRANCH,
-        "environment": param.ENV,
+        "environment": param.ENVIRONMENTS,
+        "admin_commands_enabled": feature_flags.get("admin_commands", False),
+        "feature_flags": feature_flags,
     }
 
 
 @router.get("/api/admin/logs/app")
-def download_app_log():
+def download_app_log(current_user: User = Depends(require_admin_logs_user)):
     log_path = Path(param.LOG_FILE)
     if not log_path.exists():
         logger.warning("Log download requested before log file exists: %s", log_path)
@@ -82,7 +95,11 @@ def download_app_log():
 
 
 @router.get("/api/admin/logs")
-def list_logs(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=10)):
+def list_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=10),
+    current_user: User = Depends(require_admin_logs_user),
+):
     log_root = get_log_root()
     if not log_root.exists():
         return {
@@ -161,7 +178,11 @@ async def run_admin_command(command_id: str, current_user: User = Depends(requir
 
 
 @router.get("/api/admin/logs/{date_key}/{file_name}")
-def download_log(date_key: str, file_name: str):
+def download_log(
+    date_key: str,
+    file_name: str,
+    current_user: User = Depends(require_admin_logs_user),
+):
     log_root = get_log_root().resolve()
     log_path = (log_root / date_key / file_name).resolve()
 

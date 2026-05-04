@@ -8,9 +8,11 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth.login import TokenResponse, create_access_token, make_user_response
 from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
+from app.runtime_state import mark_user_online
 from app.setting.config import parameters as param
 
 router = APIRouter()
@@ -61,38 +63,8 @@ class RegisterRequest(BaseModel):
         return value
 
 
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    handle: str
-    tag: str
-    first_name: str | None
-    last_name: str | None
-    name: str
-    role: str
-    is_super_admin: bool
-    permissions: list[str]
-
-
 def hash_password(password):
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def make_user_response(user):
-    permissions = ["super_admin"] if user.is_super_admin else []
-
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        handle=user.handle,
-        tag=f"@{user.handle}",
-        first_name=user.first_name,
-        last_name=user.last_name,
-        name=user.name,
-        role=user.role or "user",
-        is_super_admin=bool(user.is_super_admin),
-        permissions=permissions,
-    )
 
 
 def normalize_handle_seed(value):
@@ -119,7 +91,7 @@ async def generate_user_handle(db: AsyncSession, name, email):
     return f"user_{secrets.token_hex(8)}"
 
 
-@router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
+@router.post("/api/auth/register", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
 async def register(
     payload: RegisterRequest,
     request: Request,
@@ -157,5 +129,9 @@ async def register(
     await db.refresh(user)
 
     reset_rate_limit(rate_limit_key)
+    mark_user_online(user.id)
     logger.info("User registered: id=%s email=%s handle=%s", user.id, user.email, user.handle)
-    return make_user_response(user)
+    return TokenResponse(
+        access_token=create_access_token(user),
+        user=make_user_response(user),
+    )

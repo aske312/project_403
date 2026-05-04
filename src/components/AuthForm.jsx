@@ -43,6 +43,7 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
   const isRegister = mode === "register";
   const passwordToggleLabel = passwordVisible ? t.hidePassword : t.showPassword;
   const passwordStrength = evaluatePassword(registrationPassword);
+  const loginPlaceholder = loginForm.login.placeholder || t.loginPlaceholder;
 
   const getPasswordPrompt = () => {
     if (!registrationPassword) return "";
@@ -189,7 +190,7 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
           <input
             name="login"
             type="text"
-            placeholder={t.loginPlaceholder}
+            placeholder={loginPlaceholder}
             autoComplete="username"
             minLength={loginForm.login.minLength}
             maxLength={loginForm.login.maxLength}

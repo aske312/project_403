@@ -24,6 +24,9 @@ def write_json_atomic(path, payload):
 
 
 def list_admin_commands():
+    if not param.ADMIN_COMMANDS_ENABLED:
+        return []
+
     return [
         {
             "id": command_id,
@@ -49,6 +52,9 @@ def read_admin_command_state():
 
 
 def queue_admin_command(command_id, requested_by):
+    if not param.ADMIN_COMMANDS_ENABLED:
+        return None
+
     if command_id not in ADMIN_COMMANDS:
         return None
 

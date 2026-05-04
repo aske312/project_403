@@ -70,22 +70,6 @@ while [[ $# -gt 0 ]]; do
             FORCE_BUILD=1
             shift
             ;;
-        --backend-host)
-            BACKEND_HOST="$2"
-            shift 2
-            ;;
-        --backend-port)
-            BACKEND_PORT="$2"
-            shift 2
-            ;;
-        --frontend-host)
-            FRONTEND_HOST="$2"
-            shift 2
-            ;;
-        --frontend-port)
-            FRONTEND_PORT="$2"
-            shift 2
-            ;;
         -h|--help)
             cat <<'HELP'
 Usage: ./start.sh [options]
@@ -105,10 +89,7 @@ Project options:
   --build-only            Prepare/check frontend build and exit.
   --force-install         Reinstall npm dependencies.
   --force-build           Run npm run build unconditionally.
-  --backend-host HOST     Backend host. Default: 127.0.0.1.
-  --backend-port PORT     Backend port. Default: 8000.
-  --frontend-host HOST    Frontend host. Default: 127.0.0.1.
-  --frontend-port PORT    Frontend port. Default: 5173.
+  Host and port settings are read only from .env.
 HELP
             exit 0
             ;;
@@ -135,6 +116,29 @@ need_command() {
         echo "$1 is not installed or is not available in PATH." >&2
         exit 1
     fi
+}
+
+dotenv_value() {
+    local key="$1"
+
+    [[ -f ".env" ]] || return 1
+
+    awk -F= -v key="$key" '
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*$/ { next }
+        {
+            current=$1
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", current)
+            if (current == key) {
+                value=substr($0, index($0, "=") + 1)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                gsub(/^"|"$/, "", value)
+                gsub(/^'\''|'\''$/, "", value)
+                print value
+                exit
+            }
+        }
+    ' .env
 }
 
 sudo_cmd() {
@@ -244,68 +248,8 @@ ensure_env_file() {
         return
     fi
 
-    step "Creating default .env"
-    local project_branch
-    project_branch="$(git branch --show-current 2>/dev/null || true)"
-    if [[ -z "$project_branch" ]]; then
-        project_branch="unknown"
-    fi
-    cat > .env <<EOF
-# APPLICATION
-APP_NAME=Project_403
-VERSION=0.0.1
-ENV=development
-DEBUG=True
-AUTO_CREATE_TABLES=True
-
-# SERVER
-HOST=0.0.0.0
-PORT=$BACKEND_PORT
-
-# DATABASE
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
-DB_FALLBACK_ENABLED=True
-DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
-
-# AUTH
-JWT_SECRET=change_me_before_public_deploy
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-AUTH_RATE_LIMIT_WINDOW_SECONDS=60
-AUTH_LOGIN_RATE_LIMIT_ATTEMPTS=5
-AUTH_REGISTER_RATE_LIMIT_ATTEMPTS=3
-
-# DEV ACCOUNTS
-DEV_SUPERUSER_ENABLED=True
-DEV_SUPERUSER_EMAIL=supervisor@project403.local
-DEV_SUPERUSER_HANDLE=supervisor
-DEV_SUPERUSER_FIRST_NAME=Supervisor
-DEV_SUPERUSER_LAST_NAME=
-DEV_SUPERUSER_PASSWORD=Supervisor403
-
-DEV_USER_ENABLED=True
-DEV_USER_EMAIL=user@project403.local
-DEV_USER_HANDLE=demo_user
-DEV_USER_FIRST_NAME=Demo
-DEV_USER_LAST_NAME=User
-DEV_USER_PASSWORD=User403pass
-
-# BUILD
-PROJECT_BRANCH=$project_branch
-
-# LOGGING
-LOG_DIR=logs
-LOG_FILE=logs/app.log
-LOG_MAX_BYTES=1048576
-LOG_BACKUP_COUNT=3
-
-# ADMIN
-ADMIN_COMMAND_FILE=logs/admin-command.json
-ADMIN_COMMAND_TTL_SECONDS=30
-
-# UI_API
-VITE_API_URL=http://$BACKEND_HOST:$BACKEND_PORT
-EOF
+    echo "Settings file is missing. Create the project settings file before starting the app." >&2
+    exit 1
 }
 
 build_outdated() {
@@ -353,6 +297,11 @@ if [[ "$UPDATE_REPO" -eq 1 ]]; then
 fi
 
 ensure_env_file
+
+BACKEND_HOST="$(dotenv_value HOST || printf '%s' "$BACKEND_HOST")"
+BACKEND_PORT="$(dotenv_value PORT || printf '%s' "$BACKEND_PORT")"
+FRONTEND_HOST="$(dotenv_value FRONTEND_HOST || printf '%s' "$FRONTEND_HOST")"
+FRONTEND_PORT="$(dotenv_value FRONTEND_PORT || printf '%s' "$FRONTEND_PORT")"
 
 if [[ "$START_DB" -eq 1 || "$DB_ONLY" -eq 1 ]]; then
     start_database
@@ -419,7 +368,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-ADMIN_COMMAND_FILE="${ADMIN_COMMAND_FILE:-logs/admin-command.json}"
+ADMIN_COMMAND_FILE="$(dotenv_value ADMIN_COMMAND_FILE || printf '%s' "${ADMIN_COMMAND_FILE:-logs/admin-command.json}")"
 ADMIN_COMMAND_ARCHIVE_DIR="logs/admin-commands"
 
 start_backend() {

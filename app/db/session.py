@@ -110,7 +110,7 @@ async def use_fallback_database():
 
 
 def is_dev_environment():
-    return param.ENV.strip().lower() in {"dev", "development", "local"}
+    return param.ENVIRONMENTS.strip().lower() in {"dev", "development", "local"}
 
 
 def hash_seed_password(password):
@@ -165,7 +165,7 @@ async def ensure_seed_user(
     is_super_admin,
     label,
 ):
-    if not enabled or not is_dev_environment():
+    if not enabled:
         return
 
     async with SessionLocal() as db_session:

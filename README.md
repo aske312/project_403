@@ -77,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb
 ./start.sh --start-db
 ```
 
-Стартовые скрипты создают `.env`, `.venv`, обновляют `pip`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
+Стартовые скрипты требуют готовый `.env`, создают `.venv`, обновляют `pip`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
 
 Docker нужен только для локального PostgreSQL. Если Docker недоступен или PostgreSQL не поднят, backend может использовать временный SQLite fallback: `sqlite+aiosqlite:///./local.db`.
 
@@ -150,14 +150,12 @@ curl -X POST http://127.0.0.1:8000/api/db/init
 | Принудительно npm install | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -ForceInstall` | `./start.sh --force-install` |
 | Принудительно build | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -ForceBuild` | `./start.sh --force-build` |
 
-Запуск на других портах:
+Запуск на других портах настраивается только через `.env`:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -BackendPort 18000 -FrontendPort 18001
-```
-
-```bash
-./start.sh --backend-port 18000 --frontend-port 18001
+```env
+FRONTEND_PORT=18001
+PORT=18000
+VITE_API_URL=http://127.0.0.1:18000
 ```
 
 ### Frontend
@@ -213,35 +211,43 @@ Admin command API доступен только в DEV-режиме пользо
 
 ## Переменные окружения
 
-`.env` не хранится в git. Если файла нет, стартовый скрипт создаст dev-вариант.
+`.env` является обязательным локальным файлом настроек и основной точкой управления проектом. Файл игнорируется git. Если файла нет, стартовый скрипт остановится с ошибкой без раскрытия имени файла настроек.
 
-```env
-APP_NAME=MessengerAPI
-VERSION=0.0.1
-ENV=development
-DEBUG=True
-AUTO_CREATE_TABLES=True
-HOST=0.0.0.0
-PORT=8000
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/messenger_db
-DB_FALLBACK_ENABLED=True
-DB_FALLBACK_URL=sqlite+aiosqlite:///./local.db
-JWT_SECRET=change_me_before_public_deploy
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-AUTH_RATE_LIMIT_WINDOW_SECONDS=60
-AUTH_LOGIN_RATE_LIMIT_ATTEMPTS=5
-AUTH_REGISTER_RATE_LIMIT_ATTEMPTS=3
-PROJECT_BRANCH=master
-LOG_FILE=logs/app.log
-LOG_MAX_BYTES=1048576
-LOG_BACKUP_COUNT=3
-ADMIN_COMMAND_FILE=logs/admin-command.json
-RUNTIME_STATE_FILE=logs/runtime-state.json
-VITE_API_URL=http://127.0.0.1:8000
-```
+`.env` - единая точка управления запуском, сборкой, секретами и dev/prod режимом. Для открытой локальной разработки оставьте `ENVIRONMENTS=DEV`. Для закрытого production-режима поменяйте этот же файл на `ENVIRONMENTS=PROD` и задайте реальные секреты.
 
-Перед публичным deploy надо заменить `JWT_SECRET`, `DATABASE_URL` и другие значения окружения на реальные. Production-профиль запуска будет оформляться отдельным этапом перед развертыванием на боевой сервер.
+Ключевые группы в `.env`:
+
+- application: `APP_NAME`, `VERSION`, `ENVIRONMENTS`;
+- server/runtime: `HOST`, `PORT`, `FRONTEND_HOST`, `FRONTEND_PORT`, `CORS_ORIGINS`;
+- frontend build: `VITE_API_URL`, ключи local/session storage и дефолты интерфейса;
+- database: `DATABASE_DRIVER`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_FALLBACK_ENABLED`, `DB_FALLBACK_URL`;
+- auth/secrets: `JWT_SECRET`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, rate limits;
+- dev accounts: `DEV_SUPERUSER_*`, `DEV_USER_*`;
+- logging/admin/runtime state: `LOG_*`, `RUNTIME_*`, `ADMIN_COMMAND_*`.
+- mode-derived behavior: `DEBUG`, `AUTO_CREATE_TABLES` and admin restart commands are derived from `ENVIRONMENTS`.
+
+Правила для секретов:
+
+- `.env` является единственным источником настроек сервера, базы данных, запуска, сборки, секретов и frontend runtime ключей.
+- `.env` хранится локально и игнорируется git; production-секреты надо задавать только в контролируемом окружении.
+- Production должен получать параметры базы, `JWT_SECRET` и будущие SMTP/OAuth/storage ключи из этого `.env`, а не из JSON-конфигов.
+- Переменные `VITE_*` считаются публичными, потому что попадают во frontend bundle.
+- `/api/admin/health` не должен отдавать приватные значения.
+
+Production-режим включается при `ENVIRONMENTS=PROD` или `ENVIRONMENTS=production`:
+
+- `DEBUG` автоматически выключается;
+- `AUTO_CREATE_TABLES` автоматически выключается;
+- admin restart commands автоматически выключаются;
+- dev seed users не отключаются режимом и остаются под контролем `DEV_SUPERUSER_ENABLED` / `DEV_USER_ENABLED`;
+- SQLite fallback остается доступным при `DB_FALLBACK_ENABLED=True`, если PostgreSQL недоступен.
+
+Production-валидация блокирует только явно небезопасные настройки:
+
+- SQLite как основную базу;
+- `JWT_SECRET=change_me_before_public_deploy`;
+
+Перед публичным deploy надо заменить `JWT_SECRET`, параметры базы и другие значения окружения на реальные. Для переключения режима достаточно изменить `ENVIRONMENTS`.
 
 ## Диаграммы
 

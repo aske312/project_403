@@ -11,13 +11,13 @@ function formatLogTime(value) {
 export default function AdminLogsSection({
   t,
   logs,
-  apiUrl,
   page,
   pageSize,
   total,
   totalPages,
   onPageChange,
   onRefresh,
+  onDownload,
   refreshing,
 }) {
   const firstItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -51,9 +51,9 @@ export default function AdminLogsSection({
                 <span>{log.resource} / {formatLogTime(log.updated_at)}</span>
               </div>
               <span>{formatBytes(log.size)}</span>
-              <a href={`${apiUrl}${log.download_url}`} download>
+              <button type="button" onClick={() => onDownload(log)}>
                 {t.download}
-              </a>
+              </button>
             </div>
           ))
         )}

@@ -21,12 +21,17 @@ runtime_heartbeat_task = None
 
 SENSITIVE_LOG_KEYS = {
     "access_token",
+    "api_key",
     "authorization",
+    "cookie",
+    "database_url",
     "jwt",
     "password",
     "password_hash",
+    "private_key",
     "refresh_token",
     "secret",
+    "smtp_password",
     "token",
 }
 
@@ -161,7 +166,7 @@ async def startup():
             "Starting %s %s env=%s branch=%s",
             param.APP_NAME,
             param.VERSION,
-            param.ENV,
+            param.ENVIRONMENTS,
             param.PROJECT_BRANCH,
         )
 

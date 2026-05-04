@@ -69,6 +69,13 @@ async function requestJson(path, options) {
   return requestJsonDeduped(`${API_URL}${path}`, options);
 }
 
+async function requestBlob(path, options) {
+  const response = await fetch(`${API_URL}${path}`, options);
+  const payload = await response.blob();
+
+  return { response, payload };
+}
+
 async function requestLocalJson(path, options) {
   return requestJsonDeduped(path, options);
 }
@@ -77,8 +84,12 @@ export function getFrontendMetrics() {
   return requestLocalJson("/__project403/frontend-metrics");
 }
 
-export function getHealth() {
-  return requestJson("/api/admin/health");
+export function getHealth(token) {
+  return requestJson("/api/admin/health", token ? {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  } : undefined);
 }
 
 export function getProfile(token) {
@@ -118,17 +129,33 @@ export async function getOpenApi() {
   return payload;
 }
 
-export function checkDatabase() {
-  return requestJson("/api/db/check_connect");
+export function checkDatabase(token) {
+  return requestJson("/api/db/check_connect", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
-export function getLogs(page = 1, pageSize = 10) {
+export function getLogs(page = 1, pageSize = 10, token) {
   const params = new URLSearchParams({
     page: String(page),
     page_size: String(pageSize),
   });
 
-  return requestJson(`/api/admin/logs?${params}`);
+  return requestJson(`/api/admin/logs?${params}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export function downloadLog(downloadUrl, token) {
+  return requestBlob(downloadUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export function runAdminCommand(commandId, token) {
