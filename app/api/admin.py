@@ -25,10 +25,12 @@ logger = logging.getLogger(__name__)
 
 def get_log_resource_name(log_path: Path) -> str:
     stem = log_path.stem
-    if stem.startswith("start-app-"):
+    if stem.startswith("build-app-"):
         return "launcher"
-    if stem.startswith("work-app-"):
-        return "work"
+    if stem.startswith("start-app-"):
+        return "start"
+    if stem.startswith("db-app-"):
+        return "db"
     if stem.startswith("app-api-"):
         return stem
     return stem.rsplit("-", 3)[0] if "-" in stem else stem

@@ -28,30 +28,46 @@ def _create_rotating_file_handler(log_path):
     raise last_error
 
 
+def _attach_file_handler(logger, log_path, level):
+    handler = _create_rotating_file_handler(log_path)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    handler.setLevel(level)
+
+    if not any(
+        isinstance(existing, RotatingFileHandler)
+        and getattr(existing, "baseFilename", None) == handler.baseFilename
+        for existing in logger.handlers
+    ):
+        logger.addHandler(handler)
+
+    return handler
+
+
 def setup_logging():
     log_path = Path(param.LOG_FILE)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    file_handler = _create_rotating_file_handler(log_path)
-    file_handler.setFormatter(formatter)
-
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG if param.DEBUG else logging.INFO)
+    _attach_file_handler(root_logger, log_path, logging.INFO if param.DEBUG else logging.INFO)
 
-    if not any(
-        isinstance(handler, RotatingFileHandler)
-        and getattr(handler, "baseFilename", None) == file_handler.baseFilename
-        for handler in root_logger.handlers
-    ):
-        root_logger.addHandler(file_handler)
+    db_log_path = Path(param.DB_LOG_FILE)
+    db_log_path.parent.mkdir(parents=True, exist_ok=True)
+    db_level = logging.INFO if param.DEBUG else logging.INFO
+
+    for logger_name in ("sqlalchemy.engine.Engine", "sqlalchemy.pool", "app.db", "app.db.session"):
+        dedicated_logger = logging.getLogger(logger_name)
+        dedicated_logger.setLevel(db_level)
+        dedicated_logger.propagate = False
+        _attach_file_handler(dedicated_logger, db_log_path, db_level)
+
+    logging.getLogger("sqlalchemy").setLevel(db_level)
+    logging.getLogger("sqlalchemy").propagate = False
 
     logging.getLogger("aiosqlite").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.INFO if param.DEBUG else logging.WARNING)
 
     return log_path
 
