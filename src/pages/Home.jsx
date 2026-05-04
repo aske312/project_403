@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import AppFooter from "../components/AppFooter";
-import AppHeader from "../components/AppHeader";
+import AppControls from "../components/AppControls";
 import Auth from "./Auth";
 import Workspace from "./Workspace";
 import { config } from "../config/appConfig";
@@ -165,9 +165,7 @@ export default function Home() {
 
   return (
     <div className={`auth-page ${theme}`}>
-      <AppHeader
-        variant="auth"
-        projectName={projectName}
+      <AppControls
         theme={theme}
         lang={lang}
         t={t}

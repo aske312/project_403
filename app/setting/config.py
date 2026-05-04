@@ -435,6 +435,7 @@ class Parameters:
 
     # Auth
     JWT_SECRET = get_str_env("JWT_SECRET")
+    MESSAGE_SECRET = get_optional_str_env("MESSAGE_SECRET", JWT_SECRET)
     JWT_ALGORITHM = get_str_env("JWT_ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env(
         "ACCESS_TOKEN_EXPIRE_MINUTES"

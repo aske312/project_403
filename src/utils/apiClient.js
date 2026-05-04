@@ -175,7 +175,7 @@ export function sendChatMessage(chatId, body, token) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ body }),
+    body: JSON.stringify({ encoded_body: encodeWireBody(body) }),
   });
 }
 
@@ -187,3 +187,19 @@ export function downloadLog(downloadUrl, token) {
   });
 }
 
+
+
+export function getWebSocketUrl(path, token) {
+  const base = API_URL.replace(/^http/i, "ws");
+  const params = new URLSearchParams({ token });
+  return `${base}${path}?${params}`;
+}
+
+export function encodeWireBody(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return `wire:v1:${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+}

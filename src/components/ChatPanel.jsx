@@ -1,6 +1,6 @@
 import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
-export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend }) {
+export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend, typingUser }) {
   const profileName = getProfileName(profile);
 
   return (
@@ -32,6 +32,8 @@ export default function ChatPanel({ activeThread, messages, profile, composerEna
           </article>
         ))}
       </div>
+
+      {typingUser && <div className="typing-indicator">{typingUser} печатает…</div>}
 
       {composerEnabled ? (
         <form className="composer" onSubmit={onSend}>

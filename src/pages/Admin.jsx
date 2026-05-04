@@ -5,21 +5,17 @@ import AdminApiSection from "../components/AdminApiSection";
 import AdminLogsSection from "../components/AdminLogsSection";
 import AdminServiceOverview from "../components/AdminServiceOverview";
 import AppFooter from "../components/AppFooter";
-import AppHeader from "../components/AppHeader";
+import AppControls from "../components/AppControls";
 import {
   checkDatabase,
   downloadLog,
   getFrontendMetrics,
   getHealth,
   getLogs,
-  getOpenApi,
 } from "../utils/apiClient";
 import { adminCopy } from "../utils/adminCopy";
-import { config } from "../config/appConfig";
 import {
-  buildEndpointsFromOpenApi,
   buildServiceRows,
-  fallbackEndpoints,
 } from "../utils/adminData";
 import { normalizeEnvironment } from "../utils/environment";
 import { getFrontendPerformanceMetrics } from "../utils/performanceMetrics";
@@ -40,7 +36,6 @@ export default function Admin() {
   const [theme, setTheme] = useState(getStoredTheme);
   const [lang, setLang] = useState(getStoredLanguage);
   const [compactViewport, setCompactViewport] = useState(false);
-  const [endpoints, setEndpoints] = useState(fallbackEndpoints);
   const [frontend, setFrontend] = useState(null);
   const [backend, setBackend] = useState(null);
   const [database, setDatabase] = useState(null);
@@ -68,7 +63,6 @@ export default function Admin() {
   } = useAuthSession();
 
   const t = adminCopy[lang];
-  const projectName = backend?.app || config.app.project.defaultName;
   const env = normalizeEnvironment(backend?.environment || import.meta.env.MODE);
   const featureFlags = backend?.feature_flags || {};
   const adminAccessAllowed = Boolean(featureFlags.admin_panel);
@@ -115,19 +109,6 @@ export default function Admin() {
       setServiceLoading("backend", false);
     }
   }, [setServiceLoading]);
-
-  const loadOpenApi = useCallback(async () => {
-    try {
-      const schema = await getOpenApi();
-      const nextEndpoints = buildEndpointsFromOpenApi(schema);
-
-      if (nextEndpoints.length > 0) {
-        setEndpoints(nextEndpoints);
-      }
-    } catch {
-      setEndpoints(fallbackEndpoints);
-    }
-  }, []);
 
   const loadDatabase = useCallback(async () => {
     setServiceLoading("database", true);
@@ -196,9 +177,6 @@ export default function Admin() {
     if (!accessReady || !adminAccessAllowed) return undefined;
 
     const timeoutId = window.setTimeout(() => {
-      if (adminApiVisible) {
-        loadOpenApi();
-      }
       if (adminServicesVisible) {
         loadDatabase();
       }
@@ -213,7 +191,6 @@ export default function Admin() {
     adminApiVisible,
     adminServicesVisible,
     loadDatabase,
-    loadOpenApi,
   ]);
 
   useEffect(() => {
@@ -306,10 +283,7 @@ export default function Admin() {
 
   return (
     <div className={`admin-page ${theme}${compactViewport ? " compact-viewport" : ""}`}>
-      <AppHeader
-        variant="admin"
-        projectName={projectName}
-        projectHref="/"
+      <AppControls
         theme={theme}
         lang={lang}
         t={t}
@@ -340,7 +314,7 @@ export default function Admin() {
 >
             </AdminServiceOverview>
           )}
-          {adminApiVisible && <AdminApiSection t={t} endpoints={endpoints} token={getAccessToken()} />}
+          {adminApiVisible && <AdminApiSection t={t} />}
           {adminLogsVisible && (
             <AdminLogsSection
               t={t}
