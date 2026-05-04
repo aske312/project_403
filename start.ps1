@@ -28,6 +28,12 @@ function Write-Step {
     Add-Content -LiteralPath $StartupLogFile -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding utf8
 }
 
+function Escape-PowerShellSingleQuote {
+    param([string]$Value)
+
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
 function Test-Command {
     param([string]$Name)
     $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
@@ -74,6 +80,70 @@ function Get-DotEnvValue {
     }
 
     return $Default
+}
+
+function Convert-ToLogToken {
+    param([string]$Value)
+
+    $token = ($Value.ToLowerInvariant() -replace "[^a-z0-9]+", "-").Trim("-")
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        return "unknown"
+    }
+
+    return $token
+}
+
+function Format-LogVersion {
+    param([string]$Version)
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return "v.unknown"
+    }
+
+    if ($Version.StartsWith("v.")) {
+        return $Version
+    }
+
+    return "v.$Version"
+}
+
+function Resolve-LogTemplate {
+    param(
+        [string]$Template,
+        [string]$DefaultTemplate,
+        [string]$Version,
+        [string]$BuildTag,
+        [string]$BuildId,
+        [string]$Stamp,
+        [string]$Directory
+    )
+
+    $template = if ([string]::IsNullOrWhiteSpace($Template)) { $DefaultTemplate } else { $Template }
+    $resolved = $template
+    $resolved = $resolved -replace "\{version\}", (Format-LogVersion $Version)
+    $resolved = $resolved -replace "\{build\}", (Convert-ToLogToken $BuildTag)
+    $resolved = $resolved -replace "\{build_id\}", (Convert-ToLogToken $BuildId)
+    $resolved = $resolved -replace "\{stamp\}", (Convert-ToLogToken $Stamp)
+
+    if ([System.IO.Path]::IsPathRooted($resolved)) {
+        return $resolved
+    }
+
+    return (Join-Path $Directory $resolved)
+}
+
+function Get-GitBuildTag {
+    if ((Test-Command "git") -and (Test-Path ".git")) {
+        try {
+            $hash = (& git rev-parse --short HEAD 2>$null | Select-Object -First 1).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($hash)) {
+                return (Convert-ToLogToken $hash)
+            }
+        } catch {
+        }
+    }
+
+    return (Convert-ToLogToken $BuildId)
 }
 
 function Get-ChildProcessIds {
@@ -610,16 +680,6 @@ function Start-Redis {
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
-$StartupLogDir = Join-Path $Root "logs\startup"
-New-Item -ItemType Directory -Path $StartupLogDir -Force | Out-Null
-$StartupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$StartupLogFile = Join-Path $StartupLogDir "launcher-$StartupStamp.log"
-$RuntimeLogDir = Join-Path $Root "logs\runtime\run-$StartupStamp"
-New-Item -ItemType Directory -Path $RuntimeLogDir -Force | Out-Null
-$BackendStdoutLog = Join-Path $RuntimeLogDir "backend.stdout.log"
-$BackendStderrLog = Join-Path $RuntimeLogDir "backend.stderr.log"
-$FrontendStdoutLog = Join-Path $RuntimeLogDir "frontend.stdout.log"
-$FrontendStderrLog = Join-Path $RuntimeLogDir "frontend.stderr.log"
 $script:launcherStart = Get-Date
 
 function Write-LauncherLog {
@@ -731,8 +791,36 @@ function Wait-ForDockerHealthy {
     throw "$Label did not become healthy within $TimeoutSeconds seconds."
 }
 
-Write-LauncherLog "Startup log: $StartupLogFile"
-Set-LauncherStatus 0 "launcher" "boot"
+function Wait-ForWritableFile {
+    param(
+        [string]$Path,
+        [string]$Label,
+        [int]$TimeoutSeconds = 10
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $stream = [System.IO.File]::Open(
+                $Path,
+                [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::ReadWrite
+            )
+            $stream.Close()
+            return
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    Write-Warning "$Label is still busy after $TimeoutSeconds seconds: $Path"
+    Write-LauncherLog "$Label is still busy after $TimeoutSeconds seconds: $Path"
+}
 
 $IsWin = ($env:OS -eq "Windows_NT") -or ($PSVersionTable.Platform -eq "Win32NT")
 if (-not $StopOnly) {
@@ -740,9 +828,32 @@ if (-not $StopOnly) {
 }
 Enter-OrCloneProject
 
+$StartupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
 Ensure-EnvFile
 
 $envSettings = Read-DotEnvSettings
+$AppVersion = Get-DotEnvValue $envSettings @("VERSION") "unknown"
+$BuildId = Get-DotEnvValue $envSettings @("BUILD_ID") "local"
+$LogRoot = Join-Path $Root "logs"
+New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
+$BuildTag = Get-GitBuildTag
+$StartupLogDir = Get-DotEnvValue $envSettings @("STARTUP_LOG_DIR", "START_LOG_DIR") "start"
+$WorkLogDir = Get-DotEnvValue $envSettings @("WORK_LOG_DIR", "WORKER_LOG_DIR") "work"
+$StartupLogDirPath = Join-Path $LogRoot $StartupLogDir
+$WorkLogDirPath = Join-Path $LogRoot $WorkLogDir
+New-Item -ItemType Directory -Path $StartupLogDirPath -Force | Out-Null
+New-Item -ItemType Directory -Path $WorkLogDirPath -Force | Out-Null
+$StartupLogTemplate = Get-DotEnvValue $envSettings @("STARTUP_LOG_TEMPLATE", "START_LOG_TEMPLATE") "start-app-{version}-{build}-{build_id}.log"
+$WorkLogTemplate = Get-DotEnvValue $envSettings @("WORK_LOG_TEMPLATE", "WORKER_LOG_TEMPLATE") "work-app-{version}-{build}-{build_id}.log"
+$StartupLogFile = Resolve-LogTemplate -Template $StartupLogTemplate -DefaultTemplate "start-app-{version}-{build}-{build_id}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $StartupLogDirPath
+$AppLogFile = Resolve-LogTemplate -Template $WorkLogTemplate -DefaultTemplate "work-app-{version}-{build}-{build_id}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $WorkLogDirPath
+$env:LOG_DIR = $LogRoot
+$env:LOG_FILE = $AppLogFile
+Write-LauncherLog "Startup log: $StartupLogFile"
+Set-LauncherStatus 0 "launcher" "boot"
+$StartupCreatedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+Write-LauncherLog ("Startup metadata: time={0}; version={1}; build={2}" -f $StartupCreatedAt, $AppVersion, $BuildId)
 $BackendHost = Get-DotEnvValue $envSettings @("HOST") $BackendHost
 $BackendPort = [int](Get-DotEnvValue $envSettings @("PORT") "$BackendPort")
 $FrontendHost = Get-DotEnvValue $envSettings @("FRONTEND_HOST") $FrontendHost
@@ -857,6 +968,7 @@ if ($BuildOnly) {
 
 if (-not $NoReplaceExisting) {
     Stop-ExistingProjectProcesses "Stopping previous project processes"
+    Wait-ForWritableFile -Path $AppLogFile -Label "Work log"
 }
 
 $startedProcessIds = @{}
@@ -875,16 +987,14 @@ $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$Front
 
 function Start-BackendService {
     Write-LauncherLog ("RUN: {0} {1}" -f $VenvPython, ($backendArgs -join " "))
-    Write-LauncherLog ("BACKEND_LOGS: stdout={0} stderr={1}" -f $BackendStdoutLog, $BackendStderrLog)
-    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $BackendStdoutLog -RedirectStandardError $BackendStderrLog -PassThru
+    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
 
 function Start-FrontendService {
     Write-LauncherLog ("RUN: {0} {1}" -f $Npm, ($frontendArgs -join " "))
-    Write-LauncherLog ("FRONTEND_LOGS: stdout={0} stderr={1}" -f $FrontendStdoutLog, $FrontendStderrLog)
-    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $FrontendStdoutLog -RedirectStandardError $FrontendStderrLog -PassThru
+    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
@@ -1001,7 +1111,7 @@ Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
 Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
 Write-Host "Startup log: $StartupLogFile" -ForegroundColor DarkGray
-Write-Host "Runtime logs: $RuntimeLogDir" -ForegroundColor DarkGray
+Write-Host "Work log: $AppLogFile" -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C to stop both processes."
 
 try {

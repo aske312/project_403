@@ -1,10 +1,31 @@
 import logging
 import json
+import time
+import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime
 
 from app.setting.config import parameters as param
+
+
+def _create_rotating_file_handler(log_path):
+    last_error = None
+    for attempt in range(1, 11):
+        try:
+            return RotatingFileHandler(
+                log_path,
+                maxBytes=param.LOG_MAX_BYTES,
+                backupCount=param.LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
+        except PermissionError as error:
+            last_error = error
+            if attempt == 10:
+                break
+            time.sleep(0.5)
+
+    raise last_error
 
 
 def setup_logging():
@@ -16,12 +37,7 @@ def setup_logging():
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    file_handler = RotatingFileHandler(
-        log_path,
-        maxBytes=param.LOG_MAX_BYTES,
-        backupCount=param.LOG_BACKUP_COUNT,
-        encoding="utf-8",
-    )
+    file_handler = _create_rotating_file_handler(log_path)
     file_handler.setFormatter(formatter)
 
     root_logger = logging.getLogger()
@@ -38,6 +54,24 @@ def setup_logging():
     logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.INFO if param.DEBUG else logging.WARNING)
 
     return log_path
+
+
+def setup_console_logging():
+    console_logger = logging.getLogger("app.console")
+    console_logger.setLevel(logging.INFO)
+    console_logger.propagate = False
+
+    if not any(
+        isinstance(handler, logging.StreamHandler)
+        and getattr(handler, "_project403_console", False)
+        for handler in console_logger.handlers
+    ):
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler._project403_console = True
+        stream_handler.setFormatter(logging.Formatter("%(message)s"))
+        console_logger.addHandler(stream_handler)
+
+    return console_logger
 
 
 def get_log_root():

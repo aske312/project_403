@@ -15,12 +15,13 @@ from app.api.db import router as api_db
 from app.api.admin import router as api_admin
 from app.cache.redis_client import close_redis, init_redis
 from app.db.session import get_public_database_url, init_active_database, init_db
-from app.logging_config import get_request_resource, setup_logging, write_request_log
+from app.logging_config import get_request_resource, setup_console_logging, setup_logging, write_request_log
 from app.runtime_state import mark_runtime_seen, start_runtime_session, stop_runtime_session
 from fastapi.middleware.cors import CORSMiddleware
 
 setup_logging()
 logger = logging.getLogger(__name__)
+console_logger = setup_console_logging()
 runtime_heartbeat_task = None
 
 SENSITIVE_LOG_KEYS = {
@@ -165,7 +166,7 @@ async def log_requests(request, call_next):
             },
         )
 
-        logger.info(
+        console_logger.info(
             "%s %s -> %s %.1fms",
             request.method,
             request.url.path,

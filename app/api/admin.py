@@ -1,4 +1,5 @@
 import logging
+import logging
 from math import ceil
 from importlib.metadata import metadata, version
 from pathlib import Path
@@ -20,6 +21,17 @@ from app.setting.config import parameters as param
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def get_log_resource_name(log_path: Path) -> str:
+    stem = log_path.stem
+    if stem.startswith("start-app-"):
+        return "launcher"
+    if stem.startswith("work-app-"):
+        return "work"
+    if stem.startswith("app-api-"):
+        return stem
+    return stem.rsplit("-", 3)[0] if "-" in stem else stem
 
 
 def get_package_stack(package_name):
@@ -112,19 +124,26 @@ def list_logs(
         }
 
     logs = []
-    for log_path in log_root.glob("*/*.log"):
+    seen_paths = set()
+    for log_path in list(log_root.glob("*.log")) + list(log_root.glob("*/*.log")):
         if not log_path.is_file():
             continue
 
+        resolved_path = log_path.resolve()
+        if resolved_path in seen_paths:
+            continue
+        seen_paths.add(resolved_path)
+
         stat = log_path.stat()
+        date_key = "root" if log_path.parent == log_root else log_path.parent.name
         logs.append(
             {
-                "date": log_path.parent.name,
+                "date": date_key,
                 "file": log_path.name,
-                "resource": log_path.stem.rsplit("-", 3)[0],
+                "resource": get_log_resource_name(log_path),
                 "size": stat.st_size,
                 "updated_at": stat.st_mtime,
-                "download_url": f"/api/admin/logs/{log_path.parent.name}/{log_path.name}",
+                "download_url": f"/api/admin/logs/{date_key}/{log_path.name}",
             }
         )
 
@@ -184,7 +203,7 @@ def download_log(
     current_user: User = Depends(require_admin_logs_user),
 ):
     log_root = get_log_root().resolve()
-    log_path = (log_root / date_key / file_name).resolve()
+    log_path = (log_root / file_name).resolve() if date_key == "root" else (log_root / date_key / file_name).resolve()
 
     if not str(log_path).startswith(str(log_root)) or log_path.suffix != ".log":
         raise HTTPException(status_code=400, detail="Invalid log path.")

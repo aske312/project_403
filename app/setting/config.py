@@ -296,7 +296,7 @@ class Parameters:
     # App
     APP_NAME = get_str_env("APP_NAME")
     APP_VERSION = get_str_env("VERSION")
-    VERSION = f"v {APP_VERSION} build {get_build_id()}"
+    VERSION = f"v.{APP_VERSION} build {get_build_id()}"
     STARTUP_DURATION_MS = None
     DATABASE_STARTUP_DURATION_MS = None
     BUILD_DURATION_MS = (
