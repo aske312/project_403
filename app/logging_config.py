@@ -107,13 +107,15 @@ def get_log_root():
 def get_request_log_path(resource, current_time=None):
     timestamp = current_time or datetime.now()
     date_key = timestamp.strftime("%Y-%m-%d")
+    time_key = timestamp.strftime("%H_%M")
     safe_resource = "".join(
         char if char.isalnum() or char in ("-", "_") else "-"
         for char in resource.lower()
     ).strip("-") or "app"
-    log_dir = get_log_root() / date_key
+    log_kind = safe_resource.removeprefix("app-")
+    log_dir = get_log_root() / param.BUILD_ID / date_key / param.BUILD_TAG
     log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir / f"{safe_resource}-{date_key}.log"
+    return log_dir / f"app-{log_kind}-v.{param.APP_VERSION}.log"
 
 
 def get_request_resource(path):

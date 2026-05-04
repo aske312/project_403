@@ -1,5 +1,4 @@
 import logging
-import logging
 from math import ceil
 from importlib.metadata import metadata, version
 from pathlib import Path
@@ -25,14 +24,10 @@ logger = logging.getLogger(__name__)
 
 def get_log_resource_name(log_path: Path) -> str:
     stem = log_path.stem
-    if stem.startswith("build-app-"):
-        return "launcher"
-    if stem.startswith("start-app-"):
-        return "start"
-    if stem.startswith("db-app-"):
-        return "db"
-    if stem.startswith("app-api-"):
-        return stem
+    if stem.startswith("app-"):
+        remainder = stem.removeprefix("app-")
+        if "-v." in remainder:
+            return remainder.split("-v.", 1)[0]
     return stem.rsplit("-", 3)[0] if "-" in stem else stem
 
 
@@ -127,7 +122,7 @@ def list_logs(
 
     logs = []
     seen_paths = set()
-    for log_path in list(log_root.glob("*.log")) + list(log_root.glob("*/*.log")):
+    for log_path in log_root.rglob("*.log"):
         if not log_path.is_file():
             continue
 
@@ -137,7 +132,9 @@ def list_logs(
         seen_paths.add(resolved_path)
 
         stat = log_path.stat()
-        date_key = "root" if log_path.parent == log_root else log_path.parent.name
+        relative_path = log_path.relative_to(log_root).as_posix()
+        relative_parts = Path(relative_path).parts
+        date_key = relative_parts[1] if len(relative_parts) >= 3 else "root"
         logs.append(
             {
                 "date": date_key,
@@ -145,7 +142,7 @@ def list_logs(
                 "resource": get_log_resource_name(log_path),
                 "size": stat.st_size,
                 "updated_at": stat.st_mtime,
-                "download_url": f"/api/admin/logs/{date_key}/{log_path.name}",
+                "download_url": f"/api/admin/logs/{relative_path}",
             }
         )
 
@@ -198,27 +195,26 @@ async def run_admin_command(command_id: str, current_user: User = Depends(requir
     }
 
 
-@router.get("/api/admin/logs/{date_key}/{file_name}")
+@router.get("/api/admin/logs/{log_path:path}")
 def download_log(
-    date_key: str,
-    file_name: str,
+    log_path: str,
     current_user: User = Depends(require_admin_logs_user),
 ):
     log_root = get_log_root().resolve()
-    log_path = (log_root / file_name).resolve() if date_key == "root" else (log_root / date_key / file_name).resolve()
+    target_path = (log_root / log_path).resolve()
 
-    if not str(log_path).startswith(str(log_root)) or log_path.suffix != ".log":
+    if not str(target_path).startswith(str(log_root)) or target_path.suffix != ".log":
         raise HTTPException(status_code=400, detail="Invalid log path.")
 
-    if not log_path.exists() or not log_path.is_file():
+    if not target_path.exists() or not target_path.is_file():
         raise HTTPException(status_code=404, detail="Log file is not available.")
 
-    logger.info("Log downloaded: %s", log_path)
+    logger.info("Log downloaded: %s", target_path)
     return Response(
-        content=log_path.read_bytes(),
+        content=target_path.read_bytes(),
         media_type="text/plain; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="{log_path.name}"',
+            "Content-Disposition": f'attachment; filename="{target_path.name}"',
         },
     )
 

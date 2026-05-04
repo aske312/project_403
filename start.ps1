@@ -109,21 +109,20 @@ function Format-LogVersion {
 
 function Resolve-LogTemplate {
     param(
+        [string]$Kind,
         [string]$Template,
         [string]$DefaultTemplate,
         [string]$Version,
-        [string]$BuildTag,
-        [string]$BuildId,
         [string]$Stamp,
         [string]$Directory
     )
 
     $template = if ([string]::IsNullOrWhiteSpace($Template)) { $DefaultTemplate } else { $Template }
     $resolved = $template
+    $resolved = "app-$Kind-$resolved"
     $resolved = $resolved -replace "\{version\}", (Format-LogVersion $Version)
-    $resolved = $resolved -replace "\{build\}", (Convert-ToLogToken $BuildTag)
-    $resolved = $resolved -replace "\{build_id\}", (Convert-ToLogToken $BuildId)
     $resolved = $resolved -replace "\{stamp\}", (Convert-ToLogToken $Stamp)
+    $resolved = $resolved -replace "\{time\}", (Convert-ToLogToken $Stamp)
 
     if ([System.IO.Path]::IsPathRooted($resolved)) {
         return $resolved
@@ -832,7 +831,8 @@ if (-not $StopOnly) {
 }
 Enter-OrCloneProject
 
-$StartupStamp = Get-Date -Format "yyyy-MM-dd HH-mm-ss"
+$StartupDate = Get-Date -Format "yyyy-MM-dd"
+$StartupStamp = Get-Date -Format "HH_mm"
 
 Ensure-EnvFile
 
@@ -842,22 +842,19 @@ $BuildId = Get-DotEnvValue $envSettings @("BUILD_ID") "local"
 $LogRoot = Join-Path $Root "logs"
 New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
 $BuildTag = Get-GitBuildTag
-$StartupLogDir = Get-DotEnvValue $envSettings @("STARTUP_LOG_DIR", "START_LOG_DIR") "build"
-$WorkLogDir = Get-DotEnvValue $envSettings @("WORK_LOG_DIR", "WORKER_LOG_DIR") "start"
-$StartupLogDirPath = Join-Path $LogRoot $StartupLogDir
-$WorkLogDirPath = Join-Path $LogRoot $WorkLogDir
-New-Item -ItemType Directory -Path $StartupLogDirPath -Force | Out-Null
-New-Item -ItemType Directory -Path $WorkLogDirPath -Force | Out-Null
-$StartupLogTemplate = Get-DotEnvValue $envSettings @("STARTUP_LOG_TEMPLATE", "START_LOG_TEMPLATE") "build-app-{version}-{build}-{build_id}-{stamp}.log"
-$WorkLogTemplate = Get-DotEnvValue $envSettings @("WORK_LOG_TEMPLATE", "WORKER_LOG_TEMPLATE") "start-app-{version}-{build}-{build_id}-{stamp}.log"
-$DbLogDir = Get-DotEnvValue $envSettings @("DB_LOG_DIR", "DATABASE_LOG_DIR") "db"
-$DbLogTemplate = Get-DotEnvValue $envSettings @("DB_LOG_TEMPLATE", "DATABASE_LOG_TEMPLATE") "db-app-{version}-{build}-{build_id}-{stamp}.log"
+$StartupBaseDirPath = Join-Path (Join-Path (Join-Path $LogRoot $BuildId) $StartupDate) $BuildTag
+New-Item -ItemType Directory -Path $StartupBaseDirPath -Force | Out-Null
+$StartupLogTemplate = Get-DotEnvValue $envSettings @("STARTUP_LOG_TEMPLATE", "START_LOG_TEMPLATE") "{version}-{stamp}.log"
+$WorkLogTemplate = Get-DotEnvValue $envSettings @("WORK_LOG_TEMPLATE", "WORKER_LOG_TEMPLATE") "{version}-{stamp}.log"
+$DbLogTemplate = Get-DotEnvValue $envSettings @("DB_LOG_TEMPLATE", "DATABASE_LOG_TEMPLATE") "{version}-{stamp}.log"
+$env:LOG_DATE = $StartupDate
 $env:LOG_STAMP = $StartupStamp
-$StartupLogFile = Resolve-LogTemplate -Template $StartupLogTemplate -DefaultTemplate "build-app-{version}-{build}-{build_id}-{stamp}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $StartupLogDirPath
-$AppLogFile = Resolve-LogTemplate -Template $WorkLogTemplate -DefaultTemplate "start-app-{version}-{build}-{build_id}-{stamp}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $WorkLogDirPath
-$DbLogFile = Resolve-LogTemplate -Template $DbLogTemplate -DefaultTemplate "db-app-{version}-{build}-{build_id}-{stamp}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory (Join-Path $LogRoot $DbLogDir)
-New-Item -ItemType Directory -Path (Join-Path $LogRoot $DbLogDir) -Force | Out-Null
+$StartupLogFile = Resolve-LogTemplate -Kind "build" -Template $StartupLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
+$AppLogFile = Resolve-LogTemplate -Kind "start" -Template $WorkLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
+$DbLogFile = Resolve-LogTemplate -Kind "db" -Template $DbLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
 Write-LauncherLog "Startup log: $StartupLogFile"
+Write-LauncherLog "Work log: $AppLogFile"
+Write-LauncherLog "DB log: $DbLogFile"
 Set-LauncherStatus 0 "launcher" "boot"
 $StartupCreatedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 Write-LauncherLog ("Startup metadata: time={0}; version={1}; build={2}" -f $StartupCreatedAt, $AppVersion, $BuildId)
@@ -1117,9 +1114,7 @@ Set-LauncherStatus 100 "launcher" "project ready"
 Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
 Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
-Write-Host "Startup log: $StartupLogFile" -ForegroundColor DarkGray
-Write-Host "Work log: $AppLogFile" -ForegroundColor DarkGray
-Write-Host "DB log: $DbLogFile" -ForegroundColor DarkGray
+Write-Host "Logs: $StartupBaseDirPath" -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C to stop both processes."
 
 try {

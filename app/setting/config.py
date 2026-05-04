@@ -253,20 +253,22 @@ def get_build_id():
         return "local"
 
 
-def resolve_log_file_path(log_dir_name, template_name, default_template, *, version_token, build_token, build_id):
+def resolve_log_file_path(log_kind, template_name, default_template, *, version_token, build_id, build_token):
     log_root = Path(get_str_env("LOG_DIR"))
-    log_dir = get_optional_str_env(log_dir_name, "")
     template = get_optional_str_env(template_name, default_template) or default_template
-    stamp = get_optional_str_env("LOG_STAMP", datetime.now().strftime("%Y-%m-%d %H-%M-%S"))
+    log_date = get_optional_str_env("LOG_DATE", datetime.now().strftime("%Y-%m-%d"))
+    stamp = get_optional_str_env("LOG_STAMP", datetime.now().strftime("%H_%M"))
 
-    filename = (
+    filename = "app-{0}-{1}".format(
+        log_kind,
         template.replace("{version}", version_token)
         .replace("{build}", build_token)
         .replace("{build_id}", build_id)
         .replace("{stamp}", stamp)
+        .replace("{time}", stamp),
     )
 
-    target_dir = log_root / log_dir if log_dir else log_root
+    target_dir = log_root / build_id / log_date / build_token
     return str(target_dir / filename)
 
 
@@ -348,44 +350,41 @@ class Parameters:
 
     # Logging
     LOG_DIR = get_str_env("LOG_DIR")
-    STARTUP_LOG_DIR = get_optional_str_env("STARTUP_LOG_DIR", "build")
-    WORK_LOG_DIR = get_optional_str_env("WORK_LOG_DIR", "start")
-    DB_LOG_DIR = get_optional_str_env("DB_LOG_DIR", "db")
     STARTUP_LOG_TEMPLATE = get_optional_str_env(
         "STARTUP_LOG_TEMPLATE",
-        "build-app-{version}-{build}-{build_id}-{stamp}.log",
+        "{version}-({stamp}).log",
     )
     WORK_LOG_TEMPLATE = get_optional_str_env(
         "WORK_LOG_TEMPLATE",
-        "start-app-{version}-{build}-{build_id}-{stamp}.log",
+        "{version}-({stamp}).log",
     )
     DB_LOG_TEMPLATE = get_optional_str_env(
         "DB_LOG_TEMPLATE",
-        "db-app-{version}-{build}-{build_id}-{stamp}.log",
+        "{version}-({stamp}).log",
     )
     STARTUP_LOG_FILE = resolve_log_file_path(
-        "STARTUP_LOG_DIR",
+        "build",
         "STARTUP_LOG_TEMPLATE",
         STARTUP_LOG_TEMPLATE,
         version_token=f"v.{APP_VERSION}",
-        build_token=BUILD_TAG,
         build_id=BUILD_ID,
+        build_token=BUILD_TAG,
     )
     LOG_FILE = resolve_log_file_path(
-        "WORK_LOG_DIR",
+        "start",
         "WORK_LOG_TEMPLATE",
         WORK_LOG_TEMPLATE,
         version_token=f"v.{APP_VERSION}",
-        build_token=BUILD_TAG,
         build_id=BUILD_ID,
+        build_token=BUILD_TAG,
     )
     DB_LOG_FILE = resolve_log_file_path(
-        "DB_LOG_DIR",
+        "db",
         "DB_LOG_TEMPLATE",
         DB_LOG_TEMPLATE,
         version_token=f"v.{APP_VERSION}",
-        build_token=BUILD_TAG,
         build_id=BUILD_ID,
+        build_token=BUILD_TAG,
     )
     LOG_MAX_BYTES = get_int_env("LOG_MAX_BYTES")
     LOG_BACKUP_COUNT = get_int_env("LOG_BACKUP_COUNT")
@@ -451,4 +450,3 @@ class Parameters:
 
 parameters = Parameters()
 validate_production_config(parameters)
-
