@@ -1,0 +1,72 @@
+features:
+  admin_panel:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+
+  admin_services:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+
+  admin_api:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: false
+      anonymous: false
+      user: false
+      admin: false
+
+  admin_logs:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+
+  admin_commands:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: false
+      anonymous: false
+      user: false
+      admin: false
+
+  footer_online_counter:
+    dev:
+      enabled: true
+      anonymous: true
+      user: true
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true

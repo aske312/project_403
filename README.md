@@ -220,11 +220,12 @@ Admin command API доступен только в DEV-режиме пользо
 - application: `APP_NAME`, `VERSION`, `ENVIRONMENTS`;
 - server/runtime: `HOST`, `PORT`, `FRONTEND_HOST`, `FRONTEND_PORT`, `CORS_ORIGINS`;
 - frontend build: `VITE_API_URL`, ключи local/session storage и дефолты интерфейса;
+- feature flags: `FEATURE_FLAGS_FILE` points to `config/feature-flags.yaml` and keeps per-environment true/false access rules;
 - database: `DATABASE_DRIVER`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_FALLBACK_ENABLED`, `DB_FALLBACK_URL`;
 - auth/secrets: `JWT_SECRET`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, rate limits;
 - dev accounts: `DEV_SUPERUSER_*`, `DEV_USER_*`;
 - logging/admin/runtime state: `LOG_*`, `RUNTIME_*`, `ADMIN_COMMAND_*`.
-- mode-derived behavior: `DEBUG`, `AUTO_CREATE_TABLES` and admin restart commands are derived from `ENVIRONMENTS`.
+- mode-derived behavior: `DEBUG` and `AUTO_CREATE_TABLES` are derived from `ENVIRONMENTS`.
 
 Правила для секретов:
 

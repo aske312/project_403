@@ -1,82 +1,54 @@
-from app.setting.config import (
-    is_dev_environment_name,
-    is_production_environment,
-    parameters as param,
-)
+from app.setting.config import normalize_environment_key, parameters as param
 
 
 def normalize(value):
     return str(value or "").strip().lower()
 
 
-def environments_match(rule_environment, current_environment):
-    rule = normalize(rule_environment)
-    current = normalize(current_environment)
+def get_environment_rules(feature_name):
+    feature_rules = param.FEATURE_FLAGS.get(feature_name, {})
+    current_environment = normalize_environment_key(param.ENVIRONMENTS)
 
-    if rule in {"", "*", "all"}:
-        return True
-    if rule == current:
-        return True
-    if is_dev_environment_name(rule) and is_dev_environment_name(current):
-        return True
-    if is_production_environment(rule) and is_production_environment(current):
-        return True
+    if not isinstance(feature_rules, dict):
+        return None
 
-    return False
-
-
-def get_environment_audience_groups(feature_name):
-    environment_rules = param.FEATURE_FLAGS.get(feature_name, {})
-    current_environment = param.ENVIRONMENTS
-
-    for environment_name, audience_groups in environment_rules.items():
-        if normalize(environment_name) == normalize(current_environment):
-            return audience_groups
-
-    for environment_name, audience_groups in environment_rules.items():
-        if environments_match(environment_name, current_environment):
-            return audience_groups
-
-    return None
+    return feature_rules.get(current_environment)
 
 
 def has_super_admin_permission(user):
     return bool(getattr(user, "is_super_admin", False))
 
 
-def audience_requirement_allowed(requirement, user):
-    requirement = normalize(requirement)
+def is_owner_user(user):
+    return normalize(getattr(user, "role", "")) == "owner" and has_super_admin_permission(user)
 
-    if requirement in {"all", "everyone", "on", "public"}:
-        return True
-    if requirement in {"authenticated", "auth", "users"}:
-        return user is not None
-    if user is None:
-        return False
-    if requirement in {"super_admin", "super_admins"}:
-        return has_super_admin_permission(user)
-    if requirement in {"owner", "owners"}:
-        return normalize(getattr(user, "role", "")) == "owner"
-    if requirement in {"admin", "admins"}:
-        return (
-            normalize(getattr(user, "role", "")) == "owner"
-            and has_super_admin_permission(user)
-        )
 
+def is_admin_user(user):
     role = normalize(getattr(user, "role", ""))
-    return role == requirement
-
-
-def audience_group_allowed(group, user):
-    return all(audience_requirement_allowed(requirement, user) for requirement in group)
+    return has_super_admin_permission(user) and role in {"owner", "admin"}
 
 
 def is_feature_enabled(feature_name, user=None):
-    audience_groups = get_environment_audience_groups(feature_name)
-    if audience_groups is None:
+    if is_owner_user(user):
+        return True
+
+    environment_rules = get_environment_rules(feature_name)
+    if not environment_rules:
         return False
 
-    return any(audience_group_allowed(group, user) for group in audience_groups)
+    if not environment_rules.get("enabled", False):
+        return False
+
+    if user is None:
+        return environment_rules.get("anonymous", False)
+
+    if is_admin_user(user):
+        return environment_rules.get("admin", False)
+
+    if normalize(getattr(user, "role", "")) == "user":
+        return environment_rules.get("user", False)
+
+    return environment_rules.get("user", False)
 
 
 def get_feature_flags(user=None):

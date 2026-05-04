@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
-import csv
 import subprocess
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -61,60 +61,159 @@ def get_required_env(name):
     return value.strip()
 
 
-def parse_feature_flag_audience(feature_name, environment_name, raw_audience):
-    raw_audience = raw_audience.strip().lower()
-    if not raw_audience:
-        raise RuntimeError(
-            f"Invalid feature flag audience for {feature_name}/{environment_name}."
-        )
+def parse_yaml_scalar(value):
+    token = value.strip()
 
-    if raw_audience == "off":
-        return []
+    if token in {"true", "True", "TRUE"}:
+        return True
+    if token in {"false", "False", "FALSE"}:
+        return False
+    if token in {"null", "Null", "NULL", "~"}:
+        return None
 
-    audience_groups = []
-    for raw_group in raw_audience.split("|"):
-        group = [item.strip() for item in raw_group.split("+") if item.strip()]
-        if not group:
-            raise RuntimeError(
-                f"Invalid feature flag audience for {feature_name}/{environment_name}."
-            )
-        audience_groups.append(group)
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in {'"', "'"}:
+        return token[1:-1]
 
-    return audience_groups
+    if re.fullmatch(r"-?\d+", token):
+        return int(token)
+    if re.fullmatch(r"-?\d+\.\d+", token):
+        return float(token)
+
+    return token
 
 
-def read_feature_flags_table(path):
-    flags = {}
+def parse_simple_yaml(text, *, source_name):
+    root = {}
+    stack = [(-1, root)]
+
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+
+        if "\t" in raw_line:
+            raise RuntimeError(f"{source_name}:{line_number} uses tabs for indentation.")
+
+        indent = len(line) - len(line.lstrip(" "))
+        if indent % 2 != 0:
+            raise RuntimeError(f"{source_name}:{line_number} must use two-space indentation.")
+
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+
+        if not stack:
+            raise RuntimeError(f"{source_name}:{line_number} has invalid indentation.")
+
+        parent = stack[-1][1]
+        key_value = line.strip()
+        if ":" not in key_value:
+            raise RuntimeError(f"{source_name}:{line_number} is missing a key separator.")
+
+        key, raw_value = key_value.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise RuntimeError(f"{source_name}:{line_number} contains an empty key.")
+
+        raw_value = raw_value.strip()
+        if raw_value == "":
+            node = {}
+            parent[key] = node
+            stack.append((indent, node))
+            continue
+
+        parent[key] = parse_yaml_scalar(raw_value)
+
+    return root
+
+
+def require_bool(mapping, key, *, source_name):
+    if key not in mapping:
+        raise RuntimeError(f"{source_name} is missing the '{key}' flag.")
+
+    value = mapping[key]
+    if not isinstance(value, bool):
+        raise RuntimeError(f"{source_name} must store '{key}' as true/false.")
+
+    return value
+
+
+def normalize_environment_key(value):
+    normalized = str(value or "").strip().lower()
+
+    if normalized in {"dev", "development", "local"}:
+        return "dev"
+    if normalized in {"prod", "production"}:
+        return "prod"
+
+    return normalized
+
+
+def read_feature_flags_config(path):
     feature_flags_path = (ENV_FILE.parent / path).resolve()
 
     if not feature_flags_path.exists():
-        raise RuntimeError("Feature flag table is missing.")
+        raise RuntimeError("Feature flag file is missing.")
 
-    with feature_flags_path.open(newline="", encoding="utf-8") as file:
-        rows = csv.DictReader(
-            row for row in file if row.strip() and not row.lstrip().startswith("#")
-        )
-        required_columns = {"feature", "environment", "audience"}
-        if not rows.fieldnames or not required_columns.issubset(rows.fieldnames):
-            raise RuntimeError(
-                "Feature flag table must contain feature, environment and audience columns."
-            )
+    parsed = parse_simple_yaml(
+        feature_flags_path.read_text(encoding="utf-8"),
+        source_name=str(feature_flags_path),
+    )
 
-        for row in rows:
-            feature_name = row["feature"].strip()
-            environment_name = row["environment"].strip().lower() or "*"
-            raw_audience = row["audience"].strip()
+    features = parsed.get("features")
+    if not isinstance(features, dict) or not features:
+        raise RuntimeError("Feature flag file must contain a top-level 'features' mapping.")
 
-            if not feature_name:
-                raise RuntimeError("Feature flag table contains an empty feature name.")
+    normalized_features = {}
+    for feature_name, feature_config in features.items():
+        feature_key = str(feature_name or "").strip()
+        if not feature_key:
+            raise RuntimeError("Feature flag file contains an empty feature name.")
 
-            flags.setdefault(feature_name, {})[environment_name] = parse_feature_flag_audience(
-                feature_name,
-                environment_name,
-                raw_audience,
-            )
+        if not isinstance(feature_config, dict) or not feature_config:
+            raise RuntimeError(f"Feature flag '{feature_key}' must define environment rules.")
 
-    return flags
+        normalized_feature = {}
+        for environment_name, environment_config in feature_config.items():
+            environment_key = normalize_environment_key(environment_name)
+            if environment_key not in {"dev", "prod"}:
+                raise RuntimeError(
+                    f"Feature flag '{feature_key}' uses unsupported environment '{environment_name}'."
+                )
+
+            if not isinstance(environment_config, dict):
+                raise RuntimeError(
+                    f"Feature flag '{feature_key}' environment '{environment_name}' must be a mapping."
+                )
+
+            normalized_feature[environment_key] = {
+                "enabled": require_bool(
+                    environment_config,
+                    "enabled",
+                    source_name=f"Feature flag '{feature_key}' environment '{environment_name}'",
+                ),
+                "anonymous": require_bool(
+                    environment_config,
+                    "anonymous",
+                    source_name=f"Feature flag '{feature_key}' environment '{environment_name}'",
+                ),
+                "user": require_bool(
+                    environment_config,
+                    "user",
+                    source_name=f"Feature flag '{feature_key}' environment '{environment_name}'",
+                ),
+                "admin": require_bool(
+                    environment_config,
+                    "admin",
+                    source_name=f"Feature flag '{feature_key}' environment '{environment_name}'",
+                ),
+            }
+
+        if "dev" not in normalized_feature or "prod" not in normalized_feature:
+            raise RuntimeError(f"Feature flag '{feature_key}' must define both dev and prod rules.")
+
+        normalized_features[feature_key] = normalized_feature
+
+    return normalized_features
 
 
 def build_database_url():
@@ -159,10 +258,6 @@ def mode_debug_enabled(value):
 
 def mode_auto_create_tables_enabled(value):
     return not is_production_environment(value)
-
-
-def mode_admin_commands_enabled(value):
-    return is_dev_environment_name(value)
 
 
 def validate_production_config(settings):
@@ -217,7 +312,7 @@ class Parameters:
     DEBUG = mode_debug_enabled(ENVIRONMENTS)
     AUTO_CREATE_TABLES = mode_auto_create_tables_enabled(ENVIRONMENTS)
     FEATURE_FLAGS_FILE = get_str_env("FEATURE_FLAGS_FILE")
-    FEATURE_FLAGS = read_feature_flags_table(FEATURE_FLAGS_FILE)
+    FEATURE_FLAGS = read_feature_flags_config(FEATURE_FLAGS_FILE)
 
     # Logging
     LOG_FILE = get_str_env("LOG_FILE")
@@ -259,9 +354,6 @@ class Parameters:
         get_int_env("AUTH_REGISTER_RATE_LIMIT_ATTEMPTS"),
         1,
     )
-
-    # DEV access seed
-    ADMIN_COMMANDS_ENABLED = mode_admin_commands_enabled(ENVIRONMENTS)
 
     DEV_SUPERUSER_ENABLED = get_bool_env(
         "DEV_SUPERUSER_ENABLED"
