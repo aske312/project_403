@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 from contextlib import suppress
@@ -45,6 +45,9 @@ class ChatMessageResponse(BaseModel):
     sender: ChatMemberResponse
     body: str
     created_at: datetime
+    delivered_at: datetime | None = None
+    read_at: datetime | None = None
+    status: str = "sent"
     own: bool
 
 
@@ -109,6 +112,16 @@ def make_member_response(user: User) -> ChatMemberResponse:
     )
 
 
+def get_message_status(message: Message, current_user: User) -> str:
+    if message.sender_id != current_user.id:
+        return "incoming"
+    if message.read_at:
+        return "read"
+    if message.delivered_at:
+        return "delivered"
+    return "sent"
+
+
 def make_message_response(message: Message, current_user: User) -> ChatMessageResponse:
     return ChatMessageResponse(
         id=message.id,
@@ -116,6 +129,9 @@ def make_message_response(message: Message, current_user: User) -> ChatMessageRe
         sender=make_member_response(message.sender),
         body=decrypt_message_body(message.body, chat_id=message.chat_id, member_ids=get_chat_member_ids(message.chat)),
         created_at=message.created_at,
+        delivered_at=message.delivered_at,
+        read_at=message.read_at,
+        status=get_message_status(message, current_user),
         own=message.sender_id == current_user.id,
     )
 
@@ -129,11 +145,12 @@ def make_message_event(message: Message, receiver: User, chat: Chat) -> dict:
 
 
 def get_chat_title(chat: Chat, current_user: User) -> str:
-    if chat.title:
-        return chat.title
+    member_ids = [member.user_id for member in chat.members]
+    if len(member_ids) == 1 and member_ids[0] == current_user.id:
+        return "Сохранённые сообщения"
 
     other_members = [member.user.name for member in chat.members if member.user_id != current_user.id]
-    return ", ".join(other_members) or "Saved messages"
+    return ", ".join(other_members) or chat.title or "Диалог"
 
 
 def ensure_dev_chat_enabled():
@@ -180,7 +197,12 @@ async def get_user_chat(db: AsyncSession, chat_id: int, current_user: User) -> C
 
 async def create_chat_message(db: AsyncSession, chat_id: int, text: str, current_user: User) -> tuple[Chat, Message]:
     chat = await get_user_chat(db, chat_id, current_user)
-    message = Message(chat_id=chat.id, sender_id=current_user.id, body=encrypt_message_body(text, chat_id=chat.id, member_ids=get_chat_member_ids(chat)))
+    message = Message(
+        chat_id=chat.id,
+        sender_id=current_user.id,
+        body=encrypt_message_body(text, chat_id=chat.id, member_ids=get_chat_member_ids(chat)),
+        delivered_at=datetime.now(timezone.utc),
+    )
     db.add(message)
     await db.commit()
     await db.refresh(message, attribute_names=["sender"])
@@ -226,6 +248,42 @@ async def list_chats(
             for chat in chats
         ],
     }
+
+
+async def mark_chat_read_state(db: AsyncSession, chat_id: int, current_user: User) -> tuple[Chat, list[Message]]:
+    chat = await get_user_chat(db, chat_id, current_user)
+    changed = []
+    now = datetime.now(timezone.utc)
+    for message in chat.messages:
+        if message.sender_id != current_user.id and not message.read_at:
+            message.read_at = now
+            if not message.delivered_at:
+                message.delivered_at = now
+            changed.append(message)
+    if changed:
+        await db.commit()
+    return chat, changed
+
+
+@router.post("/{chat_id}/read")
+async def mark_chat_read(
+    chat_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    ensure_dev_chat_enabled()
+    chat, changed = await mark_chat_read_state(db, chat_id, current_user)
+    if changed:
+        message_ids = [message.id for message in changed]
+        for member in chat.members:
+            await manager.send_to_user(member.user_id, {
+                "type": "read",
+                "chat_id": chat.id,
+                "message_ids": message_ids,
+                "reader": make_member_response(current_user).model_dump(mode="json"),
+                "read_at": datetime.now(timezone.utc).isoformat(),
+            })
+    return {"status": "ok", "chat_id": chat.id, "read_message_ids": [message.id for message in changed]}
 
 
 @router.post("/{chat_id}/messages")
@@ -282,6 +340,20 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                     continue
 
                 chat = await get_user_chat(db, chat_id, current_user)
+
+                if event_type == "read":
+                    chat, changed = await mark_chat_read_state(db, chat.id, current_user)
+                    if changed:
+                        message_ids = [message.id for message in changed]
+                        for member in chat.members:
+                            await manager.send_to_user(member.user_id, {
+                                "type": "read",
+                                "chat_id": chat.id,
+                                "message_ids": message_ids,
+                                "reader": make_member_response(current_user).model_dump(mode="json"),
+                                "read_at": datetime.now(timezone.utc).isoformat(),
+                            })
+                    continue
 
                 if event_type == "typing":
                     await manager.broadcast_to_chat_members(

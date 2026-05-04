@@ -168,6 +168,15 @@ export function getChats(token) {
   });
 }
 
+export function markChatRead(chatId, token) {
+  return requestJson(`/api/chats/${chatId}/read`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export function sendChatMessage(chatId, body, token) {
   return requestJson(`/api/chats/${chatId}/messages`, {
     method: "POST",

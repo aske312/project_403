@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, Chat, ChatMember, Message, User
 from app.setting.config import parameters as param
+from app.message_cipher import encrypt_message_body
 
 logger = logging.getLogger(__name__)
 db_sql_logger = logging.getLogger("app.db.sql")
@@ -154,6 +155,7 @@ async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await ensure_user_handle_column(conn)
+        await ensure_message_status_columns(conn)
 
 
 async def ensure_user_handle_column(conn):
@@ -202,6 +204,26 @@ async def ensure_user_handle_column(conn):
         await conn.execute(
             text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_handle ON users (handle)")
         )
+
+
+async def ensure_message_status_columns(conn):
+    dialect = conn.dialect.name
+
+    if dialect == "sqlite":
+        columns_result = await conn.execute(text("PRAGMA table_info(messages)"))
+        columns = list(columns_result)
+        await ensure_sqlite_table_column(conn, columns, "messages", "delivered_at", "DATETIME")
+        await ensure_sqlite_table_column(conn, columns, "messages", "read_at", "DATETIME")
+        return
+
+    if dialect == "postgresql":
+        await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP WITH TIME ZONE"))
+
+
+async def ensure_sqlite_table_column(conn, columns, table_name, column_name, column_type):
+    if not any(row[1] == column_name for row in columns):
+        await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"))
 
 
 async def ensure_sqlite_column(conn, columns, column_name, column_type):
@@ -366,6 +388,34 @@ async def ensure_dev_seed_users():
     )
 
 
+async def ensure_self_chat(db_session, user):
+    existing_result = await db_session.execute(
+        select(Chat)
+        .options(selectinload(Chat.members))
+        .join(ChatMember)
+        .where(ChatMember.user_id == user.id)
+    )
+    for chat in existing_result.scalars().unique().all():
+        member_ids = [member.user_id for member in chat.members]
+        if member_ids == [user.id] or set(member_ids) == {user.id}:
+            return chat
+
+    chat = Chat(title="Saved messages")
+    db_session.add(chat)
+    await db_session.flush()
+    db_session.add(ChatMember(chat_id=chat.id, user_id=user.id))
+    db_session.add(Message(
+        chat_id=chat.id,
+        sender_id=user.id,
+        body=encrypt_message_body(
+            "Личный чат с самим собой. Можно сохранять заметки и тестировать сообщения.",
+            chat_id=chat.id,
+            member_ids=[user.id],
+        ),
+    ))
+    return chat
+
+
 async def ensure_dev_direct_chat():
     if not is_dev_environment():
         return
@@ -382,6 +432,9 @@ async def ensure_dev_direct_chat():
         if not supervisor or not user:
             return
 
+        await ensure_self_chat(db_session, supervisor)
+        await ensure_self_chat(db_session, user)
+
         existing_result = await db_session.execute(
             select(Chat)
             .options(selectinload(Chat.members))
@@ -391,23 +444,29 @@ async def ensure_dev_direct_chat():
         for chat in existing_result.scalars().unique().all():
             member_ids = {member.user_id for member in chat.members}
             if member_ids == {supervisor.id, user.id}:
+                await db_session.commit()
                 logger.info("DEV direct chat already exists: id=%s", chat.id)
                 return
 
         chat = Chat(title="DEV: supervisor ↔ user")
         db_session.add(chat)
         await db_session.flush()
+        member_ids = [supervisor.id, user.id]
         db_session.add_all([
             ChatMember(chat_id=chat.id, user_id=supervisor.id),
             ChatMember(chat_id=chat.id, user_id=user.id),
             Message(
                 chat_id=chat.id,
                 sender_id=supervisor.id,
-                body="DEV чат готов: можно проверять обмен сообщениями между supervisor и user.",
+                body=encrypt_message_body(
+                    "DEV чат готов: можно проверять обмен сообщениями между supervisor и user.",
+                    chat_id=chat.id,
+                    member_ids=member_ids,
+                ),
             ),
         ])
         await db_session.commit()
-        logger.info("DEV direct chat created: id=%s supervisor=%s user=%s", chat.id, supervisor.email, user.email)
+        logger.info("DEV direct/self chats ensured: direct=%s supervisor=%s user=%s", chat.id, supervisor.email, user.email)
 
 
 async def init_db():

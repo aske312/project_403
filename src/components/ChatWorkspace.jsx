@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import { threads as staticThreads } from "../utils/workspaceData";
 import { getAccessToken } from "../utils/useAuthSession";
-import { encodeWireBody, getChats, getWebSocketUrl, sendChatMessage } from "../utils/apiClient";
+import { encodeWireBody, getChats, getWebSocketUrl, markChatRead, sendChatMessage } from "../utils/apiClient";
 
 function formatMessageTime(value) {
   if (!value) return "сейчас";
@@ -22,7 +22,7 @@ function mapLiveChatToThread(chat) {
     type: "direct",
     name: chat.title || fallbackMember?.name || "DEV чат",
     topic: "Живой DEV-чат. Сообщения хранятся в зашифрованном виде.",
-    status: "online",
+    status: chat.members?.length === 1 ? "self" : "online",
     unread: 0,
     members: chat.members?.map((member) => member.name) || [],
     messages: (chat.messages || []).map((message) => ({
@@ -32,6 +32,7 @@ function mapLiveChatToThread(chat) {
       role: message.sender?.role || "user",
       time: formatMessageTime(message.created_at),
       text: message.body,
+      status: message.status || "sent",
     })),
   };
 }
@@ -43,7 +44,6 @@ export default function ChatWorkspace({
   integrations = {},
   theme = "light",
   lang = "RU",
-  t = {},
   adminLinkVisible = false,
   adminLinkLabel = "Admin",
   onToggleLang,
@@ -131,11 +131,25 @@ export default function ChatWorkspace({
                   role: payload.message.sender?.role || "user",
                   time: formatMessageTime(payload.message.created_at),
                   text: payload.message.body,
+                  status: payload.message.status || "delivered",
                 },
               ],
             };
           }));
           setTypingUsers((current) => ({ ...current, [payload.message.chat_id]: null }));
+        }
+
+        if (payload.type === "read") {
+          setLiveThreads((current) => current.map((thread) => {
+            if (thread.liveChatId !== payload.chat_id) return thread;
+            const readIds = new Set((payload.message_ids || []).map((id) => `live-message-${id}`));
+            return {
+              ...thread,
+              messages: thread.messages.map((message) => (
+                readIds.has(message.id) ? { ...message, status: "read" } : message
+              )),
+            };
+          }));
         }
 
         if (payload.type === "typing") {
@@ -166,8 +180,26 @@ export default function ChatWorkspace({
   const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0] || staticThreads[0];
   const currentMessages = [...(activeThread.messages || []), ...(localMessages[activeThread.id] || [])];
 
+  const sendReadReceipt = useCallback((thread) => {
+    if (!thread?.liveChatId) return;
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "read", chat_id: thread.liveChatId }));
+      return;
+    }
+    markChatRead(thread.liveChatId, getAccessToken()).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (activeThread?.liveChatId) {
+      sendReadReceipt(activeThread);
+    }
+  }, [activeThread, sendReadReceipt]);
+
   const handleThreadChange = (threadId) => {
     setActiveThreadId(threadId);
+    const nextThread = threads.find((thread) => thread.id === threadId);
+    sendReadReceipt(nextThread);
     setLiveThreads((current) => current.map((thread) => (
       thread.id === threadId ? { ...thread, unread: 0 } : thread
     )));
@@ -204,6 +236,7 @@ export default function ChatWorkspace({
             role: profile?.role || "user",
             time: "сейчас",
             text,
+            status: "sent",
           },
         ],
       }));
@@ -239,6 +272,7 @@ export default function ChatWorkspace({
           role: profile?.role || "user",
           time: "сейчас",
           text,
+          status: "sent",
         },
       ],
     }));
@@ -282,12 +316,7 @@ export default function ChatWorkspace({
                 <strong>{lang}</strong>
               </button>
               {adminLinkVisible && <a href="/admin"><span>Панель</span><strong>{adminLinkLabel}</strong></a>}
-              {onLogout && <button type="button" onClick={onLogout}><span>Сессия</span><strong>{t.logout || "Выйти"}</strong></button>}
-            </div>
-            <div className="settings-grid">
-              <div><span>Realtime</span><strong>{liveStatus === "realtime" ? "WebSocket" : "HTTP fallback"}</strong></div>
-              <div><span>Сообщения</span><strong>Encrypted at rest</strong></div>
-              <div><span>Окружение</span><strong>{environment}</strong></div>
+              {onLogout && <button className="settings-logout" type="button" onClick={onLogout}>Выйти</button>}
             </div>
           </section>
         </div>
