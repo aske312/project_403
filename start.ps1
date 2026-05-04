@@ -1531,6 +1531,35 @@ function Initialize-LiveLogOffsets {
     }
 }
 
+function Test-BenignWebSocketLogLine {
+    param([string]$Line)
+
+    $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
+    if ($normalized -match "exception|traceback|error|failed|critical|disconnecterror|clientdisconnected") {
+        return $false
+    }
+
+    return (
+        $normalized -match "websocket .*\[accepted\]" -or
+        $normalized -match "connection open" -or
+        $normalized -match "connection closed" -or
+        $normalized -match "websocket /api/chats/ws"
+    )
+}
+
+function Get-LiveLogDisplaySource {
+    param(
+        [string]$Source,
+        [string]$Line
+    )
+
+    if ($Source -eq "backend:err" -and (Test-BenignWebSocketLogLine -Line $Line)) {
+        return "backend:ws"
+    }
+
+    return $Source
+}
+
 function Get-LiveLogColor {
     param(
         [string]$Source,
@@ -1539,8 +1568,14 @@ function Get-LiveLogColor {
     )
 
     $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
-    if ($Source -match "err" -or $normalized -match "error|exception|traceback|failed|critical") {
+    if (Test-BenignWebSocketLogLine -Line $Line) {
+        return [ConsoleColor]::Cyan
+    }
+    if ($normalized -match "error|exception|traceback|failed|critical") {
         return [ConsoleColor]::Red
+    }
+    if ($Source -match "err") {
+        return [ConsoleColor]::Yellow
     }
     if ($normalized -match "warning|warn|fallback") {
         return [ConsoleColor]::Yellow
@@ -1566,14 +1601,17 @@ function Write-LiveLogLine {
     }
 
     $time = Get-Date -Format "HH:mm:ss"
+    $displaySource = Get-LiveLogDisplaySource -Source $Source -Line $Line
     $lineColor = Get-LiveLogColor -Source $Source -Line $Line -DefaultColor $Color
     $sourceColor = [ConsoleColor]::Magenta
-    if ($Source -match "err") {
+    if ($displaySource -eq "backend:ws") {
+        $sourceColor = [ConsoleColor]::Cyan
+    } elseif ($displaySource -match "err") {
         $sourceColor = [ConsoleColor]::Yellow
     }
 
     Write-Host ("  [{0}] " -f $time) -NoNewline -ForegroundColor DarkGray
-    Write-Host ("{0,-12}" -f $Source) -NoNewline -ForegroundColor $sourceColor
+    Write-Host ("{0,-12}" -f $displaySource) -NoNewline -ForegroundColor $sourceColor
     Write-Host " | " -NoNewline -ForegroundColor DarkGray
     Write-Host $Line -ForegroundColor $lineColor
 }
