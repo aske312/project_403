@@ -226,6 +226,18 @@ def build_database_url():
     return f"{driver}://{user}:{password}@{host}:{port}/{name}"
 
 
+def build_redis_url():
+    password = get_optional_str_env("REDIS_PASSWORD", "")
+    host = get_str_env("REDIS_HOST")
+    port = get_int_env("REDIS_PORT")
+    db = get_int_env("REDIS_DB")
+
+    if password:
+        return f"redis://:{quote_plus(password)}@{host}:{port}/{db}"
+
+    return f"redis://{host}:{port}/{db}"
+
+
 def get_build_id():
     build_id = get_str_env("BUILD_ID")
     if build_id and build_id.lower() != "dev":
@@ -334,6 +346,12 @@ class Parameters:
     )
     DB_FALLBACK_ENABLED = get_bool_env(
         "DB_FALLBACK_ENABLED"
+    )
+    REDIS_URL = get_optional_str_env("REDIS_URL") or build_redis_url()
+    REDIS_RATE_LIMIT_PREFIX = get_str_env("REDIS_RATE_LIMIT_PREFIX")
+    REDIS_RATE_LIMIT_KEY_TTL_SECONDS = max(
+        get_int_env("REDIS_RATE_LIMIT_KEY_TTL_SECONDS"),
+        1,
     )
 
     # Auth

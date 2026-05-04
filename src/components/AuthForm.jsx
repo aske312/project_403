@@ -36,7 +36,7 @@ function RequiredMark() {
   );
 }
 
-export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
+export default function AuthForm({ t, mode, status, submitting, onModeChange, onSubmit }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [registrationPassword, setRegistrationPassword] = useState("");
   const [registrationTouched, setRegistrationTouched] = useState(false);
@@ -168,8 +168,8 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
 
       {renderPasswordField(true)}
 
-      <button className="primary-btn" type="submit">
-        {t.submitRegister}
+      <button className="primary-btn" type="submit" disabled={submitting} aria-busy={submitting}>
+        {submitting ? t.loading : t.submitRegister}
       </button>
     </form>
   );
@@ -205,8 +205,8 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
 
         {renderPasswordField(false)}
 
-        <button className="primary-btn" type="submit">
-          {t.submitLogin}
+        <button className="primary-btn" type="submit" disabled={submitting} aria-busy={submitting}>
+          {submitting ? t.loading : t.submitLogin}
         </button>
       </form>
 
@@ -239,18 +239,18 @@ export default function AuthForm({ t, mode, status, onModeChange, onSubmit }) {
               <p className="auth-kicker">{t.register}</p>
               <h2 id="registration-form-title">{t.titleRegister}</h2>
             </div>
-            <button
-              className="modal-close"
-              type="button"
-              onClick={() => onModeChange("login")}
-              aria-label={t.close}
-              title={t.close}
+          <button
+            className="modal-close"
+            type="button"
+            onClick={() => onModeChange("login")}
+            aria-label={t.close}
+            title={t.close}
             >
               x
             </button>
           </div>
 
-          {registrationForm}
+        {registrationForm}
 
           {status && (
             <div className="status-note" role="alert">

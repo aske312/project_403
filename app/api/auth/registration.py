@@ -99,7 +99,7 @@ async def register(
 ):
     email = payload.email
     rate_limit_key = make_rate_limit_key("register", request, email)
-    enforce_rate_limit(
+    await enforce_rate_limit(
         rate_limit_key,
         limit=param.AUTH_REGISTER_RATE_LIMIT_ATTEMPTS,
         window_seconds=param.AUTH_RATE_LIMIT_WINDOW_SECONDS,
@@ -128,7 +128,7 @@ async def register(
     await db.commit()
     await db.refresh(user)
 
-    reset_rate_limit(rate_limit_key)
+    await reset_rate_limit(rate_limit_key)
     mark_user_online(user.id)
     logger.info("User registered: id=%s email=%s handle=%s", user.id, user.email, user.handle)
     return TokenResponse(

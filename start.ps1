@@ -6,7 +6,9 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipBuild,
     [switch]$StartDb,
+    [switch]$StartRedis,
     [switch]$DbOnly,
+    [switch]$RedisOnly,
     [switch]$InstallOnly,
     [switch]$BuildOnly,
     [switch]$ForceInstall,
@@ -23,8 +25,7 @@ $FrontendPort = 5173
 
 function Write-Step {
     param([string]$Message)
-    Write-Host ""
-    Write-Host "==> $Message" -ForegroundColor Cyan
+    Add-Content -LiteralPath $StartupLogFile -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding utf8
 }
 
 function Test-Command {
@@ -497,6 +498,40 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-LoggedChecked {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+
+    $tempOut = [System.IO.Path]::GetTempFileName()
+    $tempErr = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $Root -PassThru -Wait -NoNewWindow -RedirectStandardOutput $tempOut -RedirectStandardError $tempErr
+
+        if (Test-Path $tempOut) {
+            $stdout = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($tempOut))
+            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+                Add-Content -LiteralPath $StartupLogFile -Value $stdout -Encoding utf8
+            }
+        }
+
+        if (Test-Path $tempErr) {
+            $stderr = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($tempErr))
+            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+                Add-Content -LiteralPath $StartupLogFile -Value $stderr -Encoding utf8
+            }
+        }
+
+        if ($process.ExitCode -ne 0) {
+            throw "Command failed: $FilePath $($Arguments -join ' ')"
+        }
+    } finally {
+        Remove-Item -LiteralPath $tempOut, $tempErr -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Test-BuildOutdated {
     if ($ForceBuild) {
         return $true
@@ -552,8 +587,137 @@ function Start-Database {
     Invoke-Checked "docker" @("compose", "up", "-d", "db")
 }
 
+function Start-Redis {
+    if (-not (Test-Path "docker-compose.yml")) {
+        throw "docker-compose.yml was not found."
+    }
+
+    Install-Docker
+
+    Write-Step "Starting Redis"
+    Invoke-Checked "docker" @("compose", "up", "-d", "redis")
+}
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+
+$StartupLogDir = Join-Path $Root "logs\startup"
+New-Item -ItemType Directory -Path $StartupLogDir -Force | Out-Null
+$StartupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$StartupLogFile = Join-Path $StartupLogDir "launcher-$StartupStamp.log"
+$script:launcherStart = Get-Date
+
+function Write-LauncherLog {
+    param([string]$Message)
+
+    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
+    Add-Content -LiteralPath $StartupLogFile -Value $line -Encoding utf8
+}
+
+function Set-LauncherStatus {
+    param(
+        [int]$Percent,
+        [string]$Stage,
+        [string]$Message
+    )
+
+    $barWidth = 24
+    $filled = [math]::Round(($Percent / 100) * $barWidth)
+    $empty = $barWidth - $filled
+    $bar = ("#" * [math]::Max($filled, 0)) + ("-" * [math]::Max($empty, 0))
+    $label = ("{0,-10}" -f $Stage)
+    $line = "[{0}] [{1,3}%] {2}: {3}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Percent, $Stage, $Message
+    Add-Content -LiteralPath $StartupLogFile -Value $line -Encoding utf8
+    Write-Progress -Activity "Project startup" -Status "${Stage}: $Message" -PercentComplete $Percent
+    Write-Host -NoNewline ("`r[{0}] {1,3}% {2}" -f $bar, $Percent, $label)
+}
+
+function Write-Step {
+    param([string]$Message)
+
+    Write-LauncherLog "==> $Message"
+}
+
+function Test-HttpEndpoint {
+    param([string]$Url)
+
+    try {
+        $response = Invoke-WebRequest -Uri $Url -Method Get -TimeoutSec 5 -UseBasicParsing
+        return $response.StatusCode -ge 200 -and $response.StatusCode -lt 300
+    } catch {
+        return $false
+    }
+}
+
+function Wait-ForHttpEndpoint {
+    param(
+        [System.Diagnostics.Process]$Process,
+        [string]$Url,
+        [string]$Label,
+        [int]$PercentStart,
+        [int]$PercentReady,
+        [int]$TimeoutSeconds = 120
+    )
+
+    Set-LauncherStatus $PercentStart $Label "waiting"
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        if ($null -ne $Process) {
+            $Process.Refresh()
+            if ($Process.HasExited) {
+                throw "$Label process exited with code $($Process.ExitCode)."
+            }
+        }
+
+        if (Test-HttpEndpoint $Url) {
+            Set-LauncherStatus $PercentReady $Label "ready"
+            return
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "$Label did not become ready at $Url within $TimeoutSeconds seconds."
+}
+
+function Test-DockerHealthy {
+    param([string]$ContainerName)
+
+    try {
+        $status = & docker inspect --format "{{.State.Health.Status}}" $ContainerName 2>$null
+        return ($status | Select-Object -First 1).Trim() -eq "healthy"
+    } catch {
+        return $false
+    }
+}
+
+function Wait-ForDockerHealthy {
+    param(
+        [string]$ContainerName,
+        [string]$Label,
+        [int]$PercentStart,
+        [int]$PercentReady,
+        [int]$TimeoutSeconds = 120
+    )
+
+    Set-LauncherStatus $PercentStart $Label "waiting"
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        if (Test-DockerHealthy $ContainerName) {
+            Set-LauncherStatus $PercentReady $Label "ready"
+            return
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "$Label did not become healthy within $TimeoutSeconds seconds."
+}
+
+Write-LauncherLog "Startup log: $StartupLogFile"
+Set-LauncherStatus 0 "launcher" "boot"
 
 $IsWin = ($env:OS -eq "Windows_NT") -or ($PSVersionTable.Platform -eq "Win32NT")
 if (-not $StopOnly) {
@@ -595,60 +759,84 @@ if ($UpdateRepo) {
     Invoke-Checked "git" @("pull", "--ff-only")
 }
 
+Set-LauncherStatus 10 "launcher" "environment loaded"
+
 if ($StartDb -or $DbOnly) {
+    Set-LauncherStatus 20 "postgres" "starting"
     Start-Database
+    Wait-ForDockerHealthy -ContainerName "project_403_postgres" -Label "postgres" -PercentStart 24 -PercentReady 30
 }
 
 if ($DbOnly) {
-    Write-Step "Database is ready"
+    Set-LauncherStatus 30 "postgres" "ready"
+    exit 0
+}
+
+if ($StartRedis -or $RedisOnly) {
+    Set-LauncherStatus 32 "redis" "starting"
+    try {
+        Start-Redis
+        Wait-ForDockerHealthy -ContainerName "project_403_redis" -Label "redis" -PercentStart 36 -PercentReady 40
+    } catch {
+        Write-Warning "Redis start failed, continuing without Redis: $($_.Exception.Message)"
+        Write-LauncherLog "Redis start failed: $($_.Exception.Message)"
+        Set-LauncherStatus 40 "redis" "unavailable"
+        if ($RedisOnly) {
+            throw
+        }
+    }
+}
+
+if ($RedisOnly) {
+    Set-LauncherStatus 40 "redis" "ready"
     exit 0
 }
 
 if (-not $SkipInstall) {
+    Set-LauncherStatus 45 "deps" "preparing"
     if (-not (Test-Path $VenvPython)) {
-        Write-Step "Creating Python virtual environment"
+        Set-LauncherStatus 47 "deps" "creating venv"
         $basePython = Get-BasePython
-        Invoke-Checked $basePython.File ($basePython.Args + @("-m", "venv", ".venv"))
+        Invoke-LoggedChecked $basePython.File ($basePython.Args + @("-m", "venv", ".venv"))
     }
 
-    Write-Step "Updating pip"
-    Invoke-Checked $VenvPython @("-m", "pip", "install", "--upgrade", "pip")
+    Set-LauncherStatus 50 "deps" "updating pip"
+    Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "--upgrade", "pip")
 
-    Write-Step "Installing Python dependencies"
-    Invoke-Checked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
+    Set-LauncherStatus 53 "deps" "installing python"
+    Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
 
     if (-not (Test-Command $Npm)) {
         throw "Node.js/npm is not installed or is not available in PATH."
     }
 
     if ($ForceInstall -or -not (Test-Path "node_modules")) {
-        Write-Step "Installing frontend dependencies"
+        Set-LauncherStatus 57 "deps" "installing frontend"
         if (Test-Path "package-lock.json") {
-            Invoke-Checked $Npm @("ci")
+            Invoke-LoggedChecked $Npm @("ci")
         } else {
-            Invoke-Checked $Npm @("install")
+            Invoke-LoggedChecked $Npm @("install")
         }
-    } else {
-        Write-Step "Frontend dependencies already installed"
     }
+    Set-LauncherStatus 60 "deps" "ready"
 }
 
 if ($InstallOnly) {
-    Write-Step "Environment is ready"
+    Set-LauncherStatus 60 "launcher" "environment ready"
     exit 0
 }
 
 if (-not $SkipBuild) {
+    Set-LauncherStatus 65 "frontend" "building"
     if (Test-BuildOutdated) {
-        Write-Step "Building frontend"
-        Invoke-Checked $Npm @("run", "build")
-    } else {
-        Write-Step "Frontend build is up to date"
+        Set-LauncherStatus 67 "frontend" "bundling"
+        Invoke-LoggedChecked $Npm @("run", "build")
     }
+    Set-LauncherStatus 70 "frontend" "build ready"
 }
 
 if ($BuildOnly) {
-    Write-Step "Build is ready"
+    Set-LauncherStatus 70 "launcher" "build ready"
     exit 0
 }
 
@@ -671,15 +859,13 @@ $backendArgs = @(
 $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort")
 
 function Start-BackendService {
-    Write-Step "Starting backend"
-    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $StartupLogFile -RedirectStandardError $StartupLogFile -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
 
 function Start-FrontendService {
-    Write-Step "Starting frontend"
-    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $StartupLogFile -RedirectStandardError $StartupLogFile -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
@@ -783,12 +969,19 @@ function Invoke-AdminCommand {
     }
 }
 
+Set-LauncherStatus 75 "backend" "starting"
 $backend = Start-BackendService
-$frontend = Start-FrontendService
+Wait-ForHttpEndpoint -Process $backend -Url "http://$BackendHost`:$BackendPort/api/admin/health" -Label "backend" -PercentStart 78 -PercentReady 85
 
+Set-LauncherStatus 88 "frontend" "starting"
+$frontend = Start-FrontendService
+Wait-ForHttpEndpoint -Process $frontend -Url "http://$FrontendHost`:$FrontendPort/__project403/frontend-metrics" -Label "frontend" -PercentStart 90 -PercentReady 96
+
+Set-LauncherStatus 100 "launcher" "project ready"
 Write-Host ""
 Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
 Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
+Write-Host "Log: $StartupLogFile" -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C to stop both processes."
 
 try {

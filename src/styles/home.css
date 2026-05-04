@@ -630,6 +630,18 @@ input {
   transform: translateY(-1px);
 }
 
+.primary-btn:disabled {
+  cursor: wait;
+  opacity: 0.78;
+  transform: none;
+  box-shadow: none;
+}
+
+.primary-btn:disabled:hover {
+  background: #2563eb;
+  transform: none;
+}
+
 .required-hint {
   margin: -2px 0 0;
   color: var(--muted);

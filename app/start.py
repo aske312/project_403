@@ -13,6 +13,7 @@ from app.api.auth.login import router as api_auth_login
 from app.api.auth.registration import router as api_auth_registration
 from app.api.db import router as api_db
 from app.api.admin import router as api_admin
+from app.cache.redis_client import close_redis, init_redis
 from app.db.session import get_public_database_url, init_active_database, init_db
 from app.logging_config import get_request_resource, setup_logging, write_request_log
 from app.runtime_state import mark_runtime_seen, start_runtime_session, stop_runtime_session
@@ -207,6 +208,11 @@ async def startup():
                 (time.perf_counter() - database_started) * 1000,
                 1,
             )
+
+        try:
+            await init_redis()
+        except Exception as exc:
+            logger.warning("Redis initialization failed, using local fallback rate limit: %s", exc)
     finally:
         param.STARTUP_DURATION_MS = round((time.perf_counter() - startup_started) * 1000, 1)
         logger.info("Startup completed in %.1fms", param.STARTUP_DURATION_MS)
@@ -221,5 +227,8 @@ async def shutdown():
         with suppress(asyncio.CancelledError):
             await runtime_heartbeat_task
         runtime_heartbeat_task = None
+
+    with suppress(Exception):
+        await close_redis()
 
     stop_runtime_session()

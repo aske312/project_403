@@ -157,7 +157,7 @@ async def login(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Login is required.")
 
     rate_limit_key = make_rate_limit_key("login", request, identifier)
-    enforce_rate_limit(
+    await enforce_rate_limit(
         rate_limit_key,
         limit=param.AUTH_LOGIN_RATE_LIMIT_ATTEMPTS,
         window_seconds=param.AUTH_RATE_LIMIT_WINDOW_SECONDS,
@@ -174,7 +174,7 @@ async def login(
         logger.info("Login rejected: login=%s", identifier)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login or password.")
 
-    reset_rate_limit(rate_limit_key)
+    await reset_rate_limit(rate_limit_key)
     mark_user_online(user.id)
     logger.info("User logged in: id=%s email=%s", user.id, user.email)
     return TokenResponse(

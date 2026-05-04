@@ -10,7 +10,9 @@ SKIP_SYSTEM_DEPS=0
 SKIP_INSTALL=0
 SKIP_BUILD=0
 START_DB=0
+START_REDIS=0
 DB_ONLY=0
+REDIS_ONLY=0
 INSTALL_ONLY=0
 BUILD_ONLY=0
 FORCE_INSTALL=0
@@ -50,8 +52,16 @@ while [[ $# -gt 0 ]]; do
             START_DB=1
             shift
             ;;
+        --start-redis)
+            START_REDIS=1
+            shift
+            ;;
         --db-only)
             DB_ONLY=1
+            shift
+            ;;
+        --redis-only)
+            REDIS_ONLY=1
             shift
             ;;
         --install-only)
@@ -84,7 +94,9 @@ Project options:
   --skip-install          Skip Python/npm dependency installation.
   --skip-build            Skip frontend dist freshness check.
   --start-db              Start PostgreSQL using docker compose before app startup.
+  --start-redis           Start Redis using docker compose before app startup.
   --db-only               Start PostgreSQL using docker compose and exit.
+  --redis-only            Start Redis using docker compose and exit.
   --install-only          Prepare environment and exit.
   --build-only            Prepare/check frontend build and exit.
   --force-install         Reinstall npm dependencies.
@@ -103,8 +115,98 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+STARTUP_LOG_DIR="logs/startup"
+mkdir -p "$STARTUP_LOG_DIR"
+STARTUP_STAMP="$(date -u +%Y%m%d-%H%M%S)"
+STARTUP_LOG_FILE="$STARTUP_LOG_DIR/launcher-$STARTUP_STAMP.log"
+
+log_detail() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$STARTUP_LOG_FILE"
+}
+
+run_logged() {
+    "$@" >>"$STARTUP_LOG_FILE" 2>&1
+}
+
+run_logged_checked() {
+    if ! run_logged "$@"; then
+        echo "Command failed: $*" >&2
+        exit 1
+    fi
+}
+
+status() {
+    local percent="$1"
+    local stage="$2"
+    local message="$3"
+    local bar_width=24
+    local filled=$((percent * bar_width / 100))
+    local empty=$((bar_width - filled))
+    local bar
+    bar="$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')"
+
+    log_detail "[$percent%] $stage: $message"
+    printf '\r[%s] %3s%% %-10s' "$bar" "$percent" "$stage"
+}
+
 step() {
-    printf '\n==> %s\n' "$1"
+    log_detail "==> $1"
+}
+
+status 0 "launcher" "boot"
+
+wait_for_http_endpoint() {
+    local url="$1"
+    local label="$2"
+    local percent_start="$3"
+    local percent_ready="$4"
+    local pid="${5:-}"
+    local timeout_seconds="${6:-120}"
+
+    status "$percent_start" "$label" "waiting"
+    local deadline=$((SECONDS + timeout_seconds))
+
+    while [[ "$SECONDS" -lt "$deadline" ]]; do
+        if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"
+            exit $?
+        fi
+
+        if curl -fsS --max-time 5 "$url" >/dev/null; then
+            status "$percent_ready" "$label" "ready"
+            return 0
+        fi
+
+        sleep 1
+    done
+
+    echo "$label did not become ready at $url within $timeout_seconds seconds." >&2
+    exit 1
+}
+
+wait_for_docker_healthy() {
+    local container_name="$1"
+    local label="$2"
+    local percent_start="$3"
+    local percent_ready="$4"
+    local timeout_seconds="${5:-120}"
+
+    status "$percent_start" "$label" "waiting"
+    local deadline=$((SECONDS + timeout_seconds))
+
+    while [[ "$SECONDS" -lt "$deadline" ]]; do
+        local health
+        health="$(docker inspect --format '{{.State.Health.Status}}' "$container_name" 2>/dev/null | head -n 1 || true)"
+        if [[ "$health" == "healthy" ]]; then
+            status "$percent_ready" "$label" "ready"
+            return 0
+        fi
+
+        sleep 1
+    done
+
+    echo "$label did not become healthy within $timeout_seconds seconds." >&2
+    exit 1
 }
 
 has_command() {
@@ -283,8 +385,24 @@ start_database() {
     docker compose up -d db
 }
 
+start_redis() {
+    if [[ ! -f "docker-compose.yml" ]]; then
+        echo "docker-compose.yml was not found." >&2
+        exit 1
+    fi
+
+    install_docker
+
+    step "Starting Redis"
+    if ! docker compose up -d redis >>"$STARTUP_LOG_FILE" 2>&1; then
+        return 1
+    fi
+}
+
 install_system_deps
 enter_or_clone_project
+
+status 10 "launcher" "environment loaded"
 
 if [[ "$UPDATE_REPO" -eq 1 ]]; then
     if [[ ! -d ".git" ]]; then
@@ -304,56 +422,80 @@ FRONTEND_HOST="$(dotenv_value FRONTEND_HOST || printf '%s' "$FRONTEND_HOST")"
 FRONTEND_PORT="$(dotenv_value FRONTEND_PORT || printf '%s' "$FRONTEND_PORT")"
 
 if [[ "$START_DB" -eq 1 || "$DB_ONLY" -eq 1 ]]; then
+    status 20 "postgres" "starting"
     start_database
+    wait_for_docker_healthy "project_403_postgres" "postgres" 24 30
 fi
 
 if [[ "$DB_ONLY" -eq 1 ]]; then
-    step "Database is ready"
+    status 30 "postgres" "ready"
+    printf '\n'
+    exit 0
+fi
+
+if [[ "$START_REDIS" -eq 1 || "$REDIS_ONLY" -eq 1 ]]; then
+    status 32 "redis" "starting"
+    if start_redis; then
+        wait_for_docker_healthy "project_403_redis" "redis" 36 40
+    else
+        log_detail "Redis start failed, continuing without Redis"
+        status 40 "redis" "unavailable"
+        if [[ "$REDIS_ONLY" -eq 1 ]]; then
+            exit 1
+        fi
+    fi
+fi
+
+if [[ "$REDIS_ONLY" -eq 1 ]]; then
+    status 40 "redis" "ready"
+    printf '\n'
     exit 0
 fi
 
 if [[ "$SKIP_INSTALL" -eq 0 ]]; then
+    status 45 "deps" "preparing"
     if [[ ! -x ".venv/bin/python" ]]; then
-        step "Creating Python virtual environment"
-        python3 -m venv .venv
+        status 47 "deps" "creating venv"
+        run_logged_checked python3 -m venv .venv
     fi
 
-    step "Updating pip"
-    .venv/bin/python -m pip install --upgrade pip
+    status 50 "deps" "updating pip"
+    run_logged_checked .venv/bin/python -m pip install --upgrade pip
 
-    step "Installing Python dependencies"
-    .venv/bin/python -m pip install -r requirements.txt
+    status 53 "deps" "installing python"
+    run_logged_checked .venv/bin/python -m pip install -r requirements.txt
 
     need_command npm
 
     if [[ "$FORCE_INSTALL" -eq 1 || ! -d "node_modules" ]]; then
-        step "Installing frontend dependencies"
+        status 57 "deps" "installing frontend"
         if [[ -f "package-lock.json" ]]; then
-            npm ci
+            run_logged_checked npm ci
         else
-            npm install
+            run_logged_checked npm install
         fi
-    else
-        step "Frontend dependencies already installed"
     fi
+    status 60 "deps" "ready"
 fi
 
 if [[ "$INSTALL_ONLY" -eq 1 ]]; then
-    step "Environment is ready"
+    status 60 "launcher" "environment ready"
+    printf '\n'
     exit 0
 fi
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
+    status 65 "frontend" "building"
     if build_outdated; then
-        step "Building frontend"
-        npm run build
-    else
-        step "Frontend build is up to date"
+        status 67 "frontend" "bundling"
+        run_logged_checked npm run build
     fi
+    status 70 "frontend" "build ready"
 fi
 
 if [[ "$BUILD_ONLY" -eq 1 ]]; then
-    step "Build is ready"
+    status 70 "launcher" "build ready"
+    printf '\n'
     exit 0
 fi
 
@@ -372,14 +514,12 @@ ADMIN_COMMAND_FILE="$(dotenv_value ADMIN_COMMAND_FILE || printf '%s' "${ADMIN_CO
 ADMIN_COMMAND_ARCHIVE_DIR="logs/admin-commands"
 
 start_backend() {
-    step "Starting backend"
-    .venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" &
+    .venv/bin/python -m uvicorn app.start:app --host "$BACKEND_HOST" --port "$BACKEND_PORT" >>"$STARTUP_LOG_FILE" 2>&1 &
     BACKEND_PID=$!
 }
 
 start_frontend() {
-    step "Starting frontend"
-    npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" &
+    npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" >>"$STARTUP_LOG_FILE" 2>&1 &
     FRONTEND_PID=$!
 }
 
@@ -462,19 +602,16 @@ handle_admin_command() {
 
     case "$command" in
         restart_backend)
-            step "Admin command: restart backend"
             stop_service "$BACKEND_PID" "backend"
             start_backend
             archive_admin_command
             ;;
         restart_frontend)
-            step "Admin command: restart frontend"
             stop_service "$FRONTEND_PID" "frontend"
             start_frontend
             archive_admin_command
             ;;
         restart_project)
-            step "Admin command: restart project"
             stop_service "$FRONTEND_PID" "frontend"
             stop_service "$BACKEND_PID" "backend"
             start_backend
@@ -488,11 +625,19 @@ handle_admin_command() {
     esac
 }
 
+status 75 "backend" "starting"
 start_backend
-start_frontend
+wait_for_http_endpoint "http://$BACKEND_HOST:$BACKEND_PORT/api/admin/health" "backend" 78 85 "$BACKEND_PID"
 
+status 88 "frontend" "starting"
+start_frontend
+wait_for_http_endpoint "http://$FRONTEND_HOST:$FRONTEND_PORT/__project403/frontend-metrics" "frontend" 90 96 "$FRONTEND_PID"
+
+status 100 "launcher" "project ready"
+printf '\n'
 printf '\nFrontend: http://%s:%s\n' "$FRONTEND_HOST" "$FRONTEND_PORT"
 printf 'Backend:  http://%s:%s\n' "$BACKEND_HOST" "$BACKEND_PORT"
+printf 'Log: %s\n' "$STARTUP_LOG_FILE"
 printf 'Press Ctrl+C to stop both processes.\n'
 
 while true; do

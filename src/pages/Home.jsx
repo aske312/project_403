@@ -52,6 +52,7 @@ export default function Home() {
   const [lang, setLang] = useState(getStoredLanguage);
   const [mode, setMode] = useState("login");
   const [status, setStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [projectName, setProjectName] = useState(config.app.project.defaultName);
   const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.VITE_ENVIRONMENTS);
   const [featureFlags, setFeatureFlags] = useState({});
@@ -115,21 +116,24 @@ export default function Home() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submitting) return;
+
+    setSubmitting(true);
     setStatus("");
     setSessionExpired(false);
 
-    const formData = new FormData(event.currentTarget);
-    const requestPayload = {
-      [isRegister ? "email" : "login"]: String(formData.get(isRegister ? "email" : "login") || ""),
-      password: String(formData.get("password") || ""),
-    };
-
-    if (isRegister) {
-      requestPayload.first_name = String(formData.get("first_name") || "");
-      requestPayload.last_name = String(formData.get("last_name") || "");
-    }
-
     try {
+      const formData = new FormData(event.currentTarget);
+      const requestPayload = {
+        [isRegister ? "email" : "login"]: String(formData.get(isRegister ? "email" : "login") || ""),
+        password: String(formData.get("password") || ""),
+      };
+
+      if (isRegister) {
+        requestPayload.first_name = String(formData.get("first_name") || "");
+        requestPayload.last_name = String(formData.get("last_name") || "");
+      }
+
       const { response, payload: result } = await (isRegister
         ? register(requestPayload)
         : login(requestPayload));
@@ -154,6 +158,8 @@ export default function Home() {
       }
     } catch (error) {
       setStatus(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -182,6 +188,7 @@ export default function Home() {
             t={t}
             mode={mode}
             status={visibleStatus}
+            submitting={submitting}
             onModeChange={handleModeChange}
             onSubmit={handleSubmit}
           />

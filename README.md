@@ -77,6 +77,16 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb
 ./start.sh --start-db
 ```
 
+Redis can be started separately:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartRedis
+```
+
+```bash
+./start.sh --start-redis
+```
+
 Стартовые скрипты требуют готовый `.env`, создают `.venv`, обновляют `pip`, устанавливают Python/npm-зависимости, проверяют frontend-сборку и запускают backend + frontend.
 
 Docker нужен только для локального PostgreSQL. Если Docker недоступен или PostgreSQL не поднят, backend может использовать временный SQLite fallback: `sqlite+aiosqlite:///./local.db`.
@@ -104,10 +114,19 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly
 ./start.sh --db-only
 ```
 
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -RedisOnly
+```
+
+```bash
+./start.sh --redis-only
+```
+
 Или напрямую:
 
 ```bash
 docker compose up -d db
+docker compose up -d redis
 ```
 
 Параметры dev-БД:
@@ -142,8 +161,10 @@ curl -X POST http://127.0.0.1:8000/api/db/init
 | Действие | Windows | Ubuntu/Linux |
 | --- | --- | --- |
 | Запуск | `powershell -ExecutionPolicy Bypass -File .\start.ps1` | `./start.sh` |
-| Запуск с БД | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb` | `./start.sh --start-db` |
-| Только БД | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly` | `./start.sh --db-only` |
+| Запуск PostgreSQL | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartDb` | `./start.sh --start-db` |
+| Запуск Redis | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -StartRedis` | `./start.sh --start-redis` |
+| Только PostgreSQL | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -DbOnly` | `./start.sh --db-only` |
+| Только Redis | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -RedisOnly` | `./start.sh --redis-only` |
 | Только подготовка | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -InstallOnly` | `./start.sh --install-only` |
 | Проверить сборку | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -BuildOnly` | `./start.sh --build-only` |
 | Обновить repo | `powershell -ExecutionPolicy Bypass -File .\start.ps1 -UpdateRepo` | `./start.sh --update-repo` |
@@ -346,4 +367,19 @@ Ubuntu/Linux:
 
 ```bash
 .venv/bin/python -m compileall app
+```
+
+## Redis
+
+Redis is required for auth rate limiting.
+
+Local settings:
+
+```env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+REDIS_RATE_LIMIT_PREFIX=project403:rate_limit
+REDIS_RATE_LIMIT_KEY_TTL_SECONDS=120
 ```
