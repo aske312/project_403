@@ -46,28 +46,38 @@ def _attach_file_handler(logger, log_path, level):
     return handler
 
 
+def _remove_stream_handlers(logger):
+    logger.handlers = [
+        handler for handler in logger.handlers
+        if not isinstance(handler, logging.StreamHandler)
+    ]
+
+
 def setup_logging():
     log_path = Path(param.LOG_FILE)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG if param.DEBUG else logging.INFO)
+    _remove_stream_handlers(root_logger)
     _attach_file_handler(root_logger, log_path, logging.INFO if param.DEBUG else logging.INFO)
 
     db_log_path = Path(param.DB_LOG_FILE)
     db_log_path.parent.mkdir(parents=True, exist_ok=True)
     db_level = logging.INFO if param.DEBUG else logging.INFO
 
-    for logger_name in ("sqlalchemy.engine.Engine", "sqlalchemy.pool", "app.db", "app.db.session"):
+    for logger_name in ("app.db", "app.db.session", "app.db.sql"):
         dedicated_logger = logging.getLogger(logger_name)
         dedicated_logger.setLevel(db_level)
         dedicated_logger.propagate = False
+        _remove_stream_handlers(dedicated_logger)
         _attach_file_handler(dedicated_logger, db_log_path, db_level)
 
-    logging.getLogger("sqlalchemy").setLevel(db_level)
-    logging.getLogger("sqlalchemy").propagate = False
-
-    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+    for logger_name in ("sqlalchemy", "sqlalchemy.engine", "sqlalchemy.engine.Engine", "sqlalchemy.pool", "aiosqlite"):
+        library_logger = logging.getLogger(logger_name)
+        library_logger.setLevel(logging.WARNING)
+        library_logger.propagate = False
+        _remove_stream_handlers(library_logger)
 
     return log_path
 

@@ -696,15 +696,19 @@ function Set-LauncherStatus {
         [string]$Message
     )
 
-    $barWidth = 24
-    $filled = [math]::Round(($Percent / 100) * $barWidth)
-    $empty = $barWidth - $filled
-    $bar = ("#" * [math]::Max($filled, 0)) + ("-" * [math]::Max($empty, 0))
-    $label = ("{0,-10}" -f $Stage)
     $line = "[{0}] [{1,3}%] {2}: {3}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Percent, $Stage, $Message
     Add-Content -LiteralPath $StartupLogFile -Value $line -Encoding utf8
-    Write-Progress -Activity "Project startup" -Status "${Stage}: $Message" -PercentComplete $Percent
-    Write-Host -NoNewline ("`r[{0}] {1,3}% {2}" -f $bar, $Percent, $label)
+
+    $barWidth = 18
+    $filled = [math]::Round(($Percent / 100) * $barWidth)
+    $empty = $barWidth - $filled
+    $bar = ("=" * [math]::Max($filled, 0)) + ("." * [math]::Max($empty, 0))
+    $status = "[{0}] {1,3}% [{2}] {3}" -f $bar, $Percent, $Stage, $Message
+    if ($Percent -ge 100) {
+        Write-Host ("`r{0}" -f $status)
+    } else {
+        Write-Host -NoNewline ("`r{0}" -f $status)
+    }
 }
 
 function Write-Step {
@@ -828,7 +832,7 @@ if (-not $StopOnly) {
 }
 Enter-OrCloneProject
 
-$StartupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$StartupStamp = Get-Date -Format "yyyy-MM-dd HH-mm-ss"
 
 Ensure-EnvFile
 

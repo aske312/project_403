@@ -1,8 +1,10 @@
 import logging
 import re
+import time
 from pathlib import Path
 
 import bcrypt
+from sqlalchemy import event
 from sqlalchemy import select
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -12,17 +14,85 @@ from app.db.models import Base, User
 from app.setting.config import parameters as param
 
 logger = logging.getLogger(__name__)
+db_sql_logger = logging.getLogger("app.db.sql")
+
+
+def _shorten_sql(value, limit=1000):
+    if value is None:
+        return ""
+
+    text_value = " ".join(str(value).split())
+    if len(text_value) <= limit:
+        return text_value
+
+    return f"{text_value[: limit - 3]}..."
+
+
+def _shorten_params(value, limit=1000):
+    if value is None:
+        return ""
+
+    try:
+        text_value = repr(value)
+    except Exception:
+        text_value = "<unrepr-able>"
+
+    if len(text_value) <= limit:
+        return text_value
+
+    return f"{text_value[: limit - 3]}..."
+
+
+def _configure_engine_logging(sync_engine):
+    @event.listens_for(sync_engine, "connect")
+    def _on_connect(dbapi_connection, connection_record):
+        db_sql_logger.info(
+            "CONNECT backend=%s url=%s",
+            get_database_backend(),
+            get_public_database_url(),
+        )
+
+    @event.listens_for(sync_engine, "before_cursor_execute")
+    def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        context._project403_query_started_at = time.perf_counter()
+        db_sql_logger.info(
+            "SQL START statement=%s params=%s executemany=%s",
+            _shorten_sql(statement),
+            _shorten_params(parameters),
+            executemany,
+        )
+
+    @event.listens_for(sync_engine, "after_cursor_execute")
+    def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        started_at = getattr(context, "_project403_query_started_at", None)
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 1) if started_at else 0.0
+        db_sql_logger.info(
+            "SQL END rows=%s duration=%.1fms",
+            cursor.rowcount,
+            duration_ms,
+        )
+
+    @event.listens_for(sync_engine, "handle_error")
+    def _handle_error(exception_context):
+        db_sql_logger.error(
+            "SQL ERROR statement=%s params=%s original=%s",
+            _shorten_sql(getattr(exception_context, "statement", None)),
+            _shorten_params(getattr(exception_context, "parameters", None)),
+            exception_context.original_exception,
+        )
 
 
 def make_engine(url):
     engine_kwargs = {
-        "echo": param.DEBUG,
+        "echo": False,
     }
 
     if not url.startswith("sqlite"):
         engine_kwargs["pool_pre_ping"] = True
 
-    return create_async_engine(url, **engine_kwargs)
+    async_engine = create_async_engine(url, **engine_kwargs)
+    _configure_engine_logging(async_engine.sync_engine)
+    return async_engine
 
 
 engine = make_engine(param.DATABASE_URL)
