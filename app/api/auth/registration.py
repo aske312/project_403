@@ -2,7 +2,6 @@ import logging
 import re
 import secrets
 
-import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -12,6 +11,7 @@ from app.api.auth.login import TokenResponse, create_access_token, make_user_res
 from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
+from app.passwords import MAX_BCRYPT_PASSWORD_BYTES, hash_password
 from app.runtime_state import mark_user_online
 from app.setting.config import parameters as param
 
@@ -19,14 +19,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 NAME_RE = re.compile(r"^[A-Za-z\u0400-\u04FF-]{1,40}$")
-PASSWORD_RE = re.compile(r"^(?=.*[A-Za-z\u0400-\u04FF])(?=.*\d).{8,128}$")
+PASSWORD_RE = re.compile(r"^(?=.*[A-Za-z\u0400-\u04FF])(?=.*\d).{8,72}$")
 
 
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str | None = Field(default=None, max_length=40)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=72)
 
     @field_validator("email")
     @classmethod
@@ -59,12 +59,11 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_password(cls, value):
         if not PASSWORD_RE.fullmatch(value):
-            raise ValueError("Password must be 8-128 characters and contain at least one letter and one digit.")
+            raise ValueError("Password must be 8-72 characters and contain at least one letter and one digit.")
+        if len(value.encode("utf-8")) > MAX_BCRYPT_PASSWORD_BYTES:
+            raise ValueError(f"Password must be at most {MAX_BCRYPT_PASSWORD_BYTES} bytes.")
+
         return value
-
-
-def hash_password(password):
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def normalize_handle_seed(value):

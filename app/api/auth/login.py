@@ -2,7 +2,6 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
-import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth.rate_limit import enforce_rate_limit, make_rate_limit_key, reset_rate_limit
 from app.db.models import User
 from app.db.session import get_session
+from app.passwords import MAX_BCRYPT_PASSWORD_BYTES, verify_password
 from app.runtime_state import mark_user_online
 from app.setting.config import parameters as param
 
@@ -26,7 +26,7 @@ HANDLE_RE = r"^@?[a-z0-9_]{3,64}$"
 class LoginRequest(BaseModel):
     login: str | None = Field(default=None, min_length=3, max_length=255)
     email: str | None = Field(default=None, min_length=3, max_length=255)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=72)
 
     @field_validator("login", "email")
     @classmethod
@@ -39,6 +39,14 @@ class LoginRequest(BaseModel):
             return identifier
 
         raise ValueError("Login must be a valid email or user tag.")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value):
+        if len(value.encode("utf-8")) > MAX_BCRYPT_PASSWORD_BYTES:
+            raise ValueError(f"Password must be at most {MAX_BCRYPT_PASSWORD_BYTES} bytes.")
+
+        return value
 
 
 class UserResponse(BaseModel):
@@ -58,10 +66,6 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-
-
-def verify_password(password, password_hash):
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
 def make_user_response(user):
