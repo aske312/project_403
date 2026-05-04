@@ -13,7 +13,7 @@ from app.api.auth.login import router as api_auth_login
 from app.api.auth.registration import router as api_auth_registration
 from app.api.db import router as api_db
 from app.api.admin import router as api_admin
-from app.cache.redis_client import close_redis, init_redis
+from app.setting.redis_client import close_redis, init_redis
 from app.db.session import get_public_database_url, init_active_database, init_db
 from app.logging_config import get_request_resource, setup_console_logging, setup_logging, write_request_log
 from app.runtime_state import mark_runtime_seen, start_runtime_session, stop_runtime_session

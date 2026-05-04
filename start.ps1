@@ -23,6 +23,7 @@ $BackendHost = "127.0.0.1"
 $BackendPort = 8000
 $FrontendHost = "127.0.0.1"
 $FrontendPort = 5173
+$DockerComposeFile = Join-Path $PSScriptRoot "config/docker-compose.yml"
 
 function Write-Step {
     param([string]$Message)
@@ -196,6 +197,23 @@ function Write-InfoRow {
 
     Write-Host ("  | {0,-11}" -f ($Name + ":")) -NoNewline -ForegroundColor DarkGray
     Write-Host $Value -ForegroundColor $Color
+}
+
+
+function Get-ModeColor {
+    param([string]$Value)
+
+    $normalized = if ([string]::IsNullOrWhiteSpace($Value)) { "" } else { $Value.ToLowerInvariant() }
+    if ($normalized.Contains("fallback") -or $normalized.Contains("disabled")) {
+        return [ConsoleColor]::Yellow
+    }
+    if ($normalized.Contains("failed") -or $normalized.Contains("error")) {
+        return [ConsoleColor]::Red
+    }
+    if ($normalized.Contains("postgresql") -or $normalized.Contains("redis") -or $normalized.Contains("enabled")) {
+        return [ConsoleColor]::Green
+    }
+    return [ConsoleColor]::Cyan
 }
 
 function Get-SpinnerFrame {
@@ -850,27 +868,27 @@ function Test-BuildOutdated {
 }
 
 function Start-Database {
-    if (-not (Test-Path "docker-compose.yml")) {
-        throw "docker-compose.yml was not found."
+    if (-not (Test-Path $DockerComposeFile)) {
+        throw "Docker compose file was not found: $DockerComposeFile"
     }
 
     Install-Docker
 
     Write-LauncherLog "RUN: docker compose up -d db"
     Write-Step "Starting PostgreSQL"
-    Invoke-Checked "docker" @("compose", "up", "-d", "db")
+    Invoke-Checked "docker" @("compose", "-f", $DockerComposeFile, "up", "-d", "db")
 }
 
 function Start-Redis {
-    if (-not (Test-Path "docker-compose.yml")) {
-        throw "docker-compose.yml was not found."
+    if (-not (Test-Path $DockerComposeFile)) {
+        throw "Docker compose file was not found: $DockerComposeFile"
     }
 
     Install-Docker
 
     Write-LauncherLog "RUN: docker compose up -d redis"
     Write-Step "Starting Redis"
-    Invoke-Checked "docker" @("compose", "up", "-d", "redis")
+    Invoke-Checked "docker" @("compose", "-f", $DockerComposeFile, "up", "-d", "redis")
 }
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -1413,12 +1431,13 @@ Write-ProjectSection "Project is ready"
 Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan
 Write-Host "  |  Launch complete. Services are online.                    |" -ForegroundColor Green
 Write-Host "  |                                                            |" -ForegroundColor DarkCyan
-Write-InfoRow "Release" "$BuildId v.$AppVersion build $BuildTag" Green
+$ReleaseEnvironment = Get-DotEnvValue $envSettings @("ENVIRONMENTS") "dev"
+Write-InfoRow "Release" "$ReleaseEnvironment v.$AppVersion build $BuildTag" Green
 Write-InfoRow "Frontend" $FrontendUrl Green
 Write-InfoRow "Backend" $BackendUrl Green
-Write-InfoRow "Docker" $LauncherDockerMode $(if ($LauncherDockerMode -eq "enabled") { [ConsoleColor]::Green } else { [ConsoleColor]::DarkGray })
-Write-InfoRow "DB" $LauncherDatabaseMode Green
-Write-InfoRow "Redis" $LauncherRedisMode Green
+Write-InfoRow "Docker" $LauncherDockerMode (Get-ModeColor $LauncherDockerMode)
+Write-InfoRow "DB" $LauncherDatabaseMode (Get-ModeColor $LauncherDatabaseMode)
+Write-InfoRow "Redis" $LauncherRedisMode (Get-ModeColor $LauncherRedisMode)
 Write-InfoRow "API health" "$BackendUrl/api/admin/health" Green
 Write-InfoRow "Logs" $StartupBaseDirPath DarkGray
 Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan

@@ -106,6 +106,11 @@ export function buildServiceRows(t, frontend, backend, database) {
     return t.active;
   }
 
+  const integrations = backend?.integrations || {};
+  const dockerEnabled = Boolean(integrations.docker_services_enabled);
+  const redisEnabled = Boolean(integrations.redis?.enabled);
+  const databaseIntegration = integrations.database || {};
+
   return [
     {
       id: "frontend",
@@ -138,12 +143,35 @@ export function buildServiceRows(t, frontend, backend, database) {
       state: databaseState,
       statusState: databaseState,
       statusLabel: getStatusLabel(databaseState),
-      stack: [database?.version || database?.backend || t.checking],
+      stack: [
+        database?.version || database?.backend || databaseIntegration.backend || t.checking,
+        databaseIntegration.postgresql_enabled ? "PostgreSQL requested" : "SQLite baseline",
+      ],
       latency: formatLatency(database?.latency_ms, t.checking),
       startupTime: formatStartupTime(
         database?.startup_ms,
         database ? t.notMeasured : t.checking,
       ),
+    },
+    {
+      id: "redis",
+      name: "Redis",
+      state: redisEnabled ? "active" : "missed",
+      statusState: redisEnabled ? "active" : "neutral",
+      statusLabel: redisEnabled ? t.active : "local fallback",
+      stack: [integrations.redis?.mode || "local_fallback"],
+      latency: t.notMeasured,
+      startupTime: t.notMeasured,
+    },
+    {
+      id: "docker",
+      name: "Docker",
+      state: dockerEnabled ? "active" : "missed",
+      statusState: dockerEnabled ? "active" : "neutral",
+      statusLabel: dockerEnabled ? t.active : "disabled",
+      stack: [integrations.compose_file || "config/docker-compose.yml"],
+      latency: t.notMeasured,
+      startupTime: t.notMeasured,
     },
   ];
 }

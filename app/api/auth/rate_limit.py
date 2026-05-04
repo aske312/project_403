@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request, status
 
-from app.cache.redis_client import get_redis_client
+from app.setting.redis_client import get_redis_client
 from app.setting.config import parameters as param
 
 logger = logging.getLogger(__name__)

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
-import AuthForm from "../components/AuthForm";
-import AuthIntro from "../components/AuthIntro";
-import ChatWorkspace from "../components/ChatWorkspace";
+import Auth from "./Auth";
+import Workspace from "./Workspace";
 import { config } from "../config/appConfig";
 import { getHealth, login, register } from "../utils/apiClient";
 import { normalizeEnvironment } from "../utils/environment";
@@ -17,7 +16,7 @@ import {
   storeTheme,
 } from "../utils/themePreference";
 import { getAccessToken, setAccessToken, useAuthSession } from "../utils/useAuthSession";
-import "../styles/home.css";
+import "../styles/auth.css";
 
 function getValidationMessages(detail) {
   if (!Array.isArray(detail)) return [];
@@ -184,19 +183,17 @@ export default function Home() {
 
       <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
         {profile ? (
-          <ChatWorkspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
+          <Workspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
         ) : (
-          <>
-            <AuthIntro t={t} projectName={projectName} />
-            <AuthForm
-              t={t}
-              mode={mode}
-              status={visibleStatus}
-              submitting={submitting}
-              onModeChange={handleModeChange}
-              onSubmit={handleSubmit}
-            />
-          </>
+          <Auth
+            mode={mode}
+            status={visibleStatus}
+            submitting={submitting}
+            t={t}
+            projectName={projectName}
+            onModeChange={handleModeChange}
+            onSubmit={handleSubmit}
+          />
         )}
       </main>
 

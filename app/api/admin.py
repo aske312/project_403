@@ -86,6 +86,7 @@ async def health(current_user: User | None = Depends(get_optional_current_user))
         "feature_flags": feature_flags,
         "integrations": {
             "docker_services_enabled": param.DOCKER_SERVICES_ENABLED,
+            "compose_file": "config/docker-compose.yml",
             "database": {
                 "backend": get_database_backend(),
                 "url": get_public_database_url(),

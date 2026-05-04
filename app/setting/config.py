@@ -426,7 +426,7 @@ class Parameters:
     DB_FALLBACK_URL = get_optional_str_env("DB_FALLBACK_URL", "sqlite+aiosqlite:///./local.db")
     DATABASE_URL = build_database_url() if POSTGRESQL_ENABLED else DB_FALLBACK_URL
     DB_FALLBACK_ENABLED = get_optional_bool_env("DB_FALLBACK_ENABLED", True)
-    REDIS_URL = get_optional_str_env("REDIS_URL") or build_redis_url()
+    REDIS_URL = (get_optional_str_env("REDIS_URL") or build_redis_url()) if REDIS_ENABLED else "redis://localhost:6379/0"
     REDIS_RATE_LIMIT_PREFIX = get_str_env("REDIS_RATE_LIMIT_PREFIX")
     REDIS_RATE_LIMIT_KEY_TTL_SECONDS = max(
         get_int_env("REDIS_RATE_LIMIT_KEY_TTL_SECONDS"),
@@ -467,7 +467,7 @@ class Parameters:
     DEV_USER_EMAIL = get_str_env("DEV_USER_EMAIL")
     DEV_USER_HANDLE = get_str_env("DEV_USER_HANDLE")
     DEV_USER_FIRST_NAME = get_str_env("DEV_USER_FIRST_NAME")
-    DEV_USER_LAST_NAME = get_str_env("DEV_USER_LAST_NAME")
+    DEV_USER_LAST_NAME = get_optional_str_env("DEV_USER_LAST_NAME", "")
     DEV_USER_PASSWORD = get_str_env("DEV_USER_PASSWORD")
 
 parameters = Parameters()

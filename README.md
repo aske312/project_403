@@ -102,7 +102,7 @@ Docker нужен только для локального PostgreSQL. Если 
 
 ## PostgreSQL
 
-Для локальной БД добавлен [docker-compose.yml](docker-compose.yml).
+Для локальной БД добавлен [config/docker-compose.yml](config/config/docker-compose.yml).
 
 Поднять только PostgreSQL:
 

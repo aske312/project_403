@@ -430,7 +430,8 @@ button {
   box-shadow: inset 3px 0 0 var(--danger);
 }
 
-.service-row.loading:hover {
+.service-row.loading:hover,
+.service-row.neutral:hover {
   background: var(--warning-soft);
   box-shadow: inset 3px 0 0 var(--warning);
 }
@@ -490,6 +491,7 @@ button {
   background: var(--danger-soft);
 }
 
+.service-hover-state.neutral,
 .service-hover-state.loading {
   color: var(--warning-text);
   background: var(--warning-soft);
