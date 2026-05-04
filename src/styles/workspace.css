@@ -535,3 +535,16 @@
   color: var(--muted);
   font-size: 14px;
 }
+
+.workspace-page-shell {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-version {
+  justify-self: end;
+  padding: 0 12px 2px;
+  color: var(--muted);
+  opacity: 0.42;
+  font: 800 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

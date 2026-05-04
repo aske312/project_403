@@ -1,9 +1,9 @@
 import { useState } from "react";
-import ChatPanel from "./workspace/ChatPanel";
-import WorkspaceDetails from "./workspace/WorkspaceDetails";
-import WorkspaceRail from "./workspace/WorkspaceRail";
-import WorkspaceSidebar from "./workspace/WorkspaceSidebar";
-import { spaces, threads } from "./workspace/workspaceData";
+import ChatPanel from "./ChatPanel";
+import WorkspaceDetails from "./WorkspaceDetails";
+import WorkspaceRail from "./WorkspaceRail";
+import WorkspaceSidebar from "./WorkspaceSidebar";
+import { spaces, threads } from "../utils/workspaceData";
 
 export default function ChatWorkspace({ profile, projectName, featureFlags = {} }) {
   const [space, setSpace] = useState("team");

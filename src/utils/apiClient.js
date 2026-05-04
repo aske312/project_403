@@ -168,11 +168,3 @@ export function downloadLog(downloadUrl, token) {
   });
 }
 
-export function runAdminCommand(commandId, token) {
-  return requestJson(`/api/admin/commands/${commandId}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}

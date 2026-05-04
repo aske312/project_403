@@ -1,5 +1,5 @@
-import { quickActions } from "./workspaceData";
-import { getInitials } from "./workspaceUtils";
+import { quickActions } from "../utils/workspaceData";
+import { getInitials } from "../utils/workspaceUtils";
 
 export default function WorkspaceSidebar({ projectName, threads, activeThreadId, quickActionsEnabled, onThreadChange }) {
   return (

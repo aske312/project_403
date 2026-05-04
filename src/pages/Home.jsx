@@ -183,7 +183,12 @@ export default function Home() {
 
       <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
         {profile ? (
-          <Workspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
+          <Workspace
+            profile={profile}
+            projectName={projectName}
+            featureFlags={featureFlags}
+            version={import.meta.env.VITE_APP_VERSION}
+          />
         ) : (
           <Auth
             mode={mode}
@@ -197,18 +202,20 @@ export default function Home() {
         )}
       </main>
 
-      <AppFooter
-        variant="auth"
-        statusState={env.state}
-        version={import.meta.env.VITE_APP_VERSION}
-        onlineUsers={onlineUsers}
-        canViewOnlineUsers={canViewOnlineUsers}
-        links={[
-          { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
-          { href: "https://vk.com/aske312", label: t.vk },
-          { href: "https://t.me/aske312", label: t.telegram },
-        ]}
-      />
+      {!profile && (
+        <AppFooter
+          variant="auth"
+          statusState={env.state}
+          version={import.meta.env.VITE_APP_VERSION}
+          onlineUsers={onlineUsers}
+          canViewOnlineUsers={canViewOnlineUsers}
+          links={[
+            { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
+            { href: "https://vk.com/aske312", label: t.vk },
+            { href: "https://t.me/aske312", label: t.telegram },
+          ]}
+        />
+      )}
     </div>
   );
 }

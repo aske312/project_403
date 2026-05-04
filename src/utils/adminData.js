@@ -1,18 +1,16 @@
 export const fallbackEndpoints = [
-  { method: "GET", path: "/api/admin/health" },
-  { method: "GET", path: "/api/admin/logs" },
-  { method: "GET", path: "/api/admin/commands" },
-  { method: "POST", path: "/api/admin/commands/{command_id}" },
-  { method: "GET", path: "/api/admin/check" },
-  { method: "POST", path: "/api/admin/check" },
-  { method: "PUT", path: "/api/admin/check" },
-  { method: "PATCH", path: "/api/admin/check" },
-  { method: "DELETE", path: "/api/admin/check" },
-  { method: "POST", path: "/api/auth/register" },
-  { method: "POST", path: "/api/auth/login" },
-  { method: "GET", path: "/api/users/me" },
-  { method: "GET", path: "/api/db/check_connect" },
-  { method: "POST", path: "/api/db/init" },
+  { method: "GET", path: "/api/admin/health", service: "admin", summary: "Backend health", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "GET", path: "/api/admin/logs", service: "admin", summary: "Project logs", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "GET", path: "/api/admin/check", service: "admin", summary: "Check endpoint", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "POST", path: "/api/admin/check", service: "admin", summary: "Check endpoint", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "PUT", path: "/api/admin/check", service: "admin", summary: "Check endpoint", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "PATCH", path: "/api/admin/check", service: "admin", summary: "Check endpoint", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "DELETE", path: "/api/admin/check", service: "admin", summary: "Check endpoint", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "POST", path: "/api/auth/register", service: "auth", summary: "Register", parameters: [], bodyTemplate: JSON.stringify({ email: "user@example.com", password: "Password123!", first_name: "Demo", last_name: "User" }, null, 2), presets: [] },
+  { method: "POST", path: "/api/auth/login", service: "auth", summary: "Login", parameters: [], bodyTemplate: JSON.stringify({ login: "user@example.com", password: "Password123!" }, null, 2), presets: [] },
+  { method: "GET", path: "/api/users/me", service: "users", summary: "Current user", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "GET", path: "/api/db/check_connect", service: "db", summary: "DB check", parameters: [], bodyTemplate: "", presets: [] },
+  { method: "POST", path: "/api/db/init", service: "db", summary: "DB init", parameters: [], bodyTemplate: "", presets: [] },
 ];
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
@@ -74,17 +72,84 @@ function formatStartupTime(value, fallback) {
   return formatDuration(value, fallback);
 }
 
+function getEndpointService(path) {
+  const segments = String(path || "").split("/").filter(Boolean);
+  if (segments[0] !== "api") return "system";
+  return segments[1] || "api";
+}
+
+function getSampleValue(schema, name = "value") {
+  const normalized = String(name).toLowerCase();
+  if (schema?.example !== undefined) return schema.example;
+  if (schema?.default !== undefined) return schema.default;
+  if (normalized.includes("email")) return "user@example.com";
+  if (normalized.includes("password")) return "Password123!";
+  if (normalized.includes("login")) return "demo";
+  if (schema?.type === "integer" || schema?.type === "number") return 1;
+  if (schema?.type === "boolean") return true;
+  if (schema?.type === "array") return [];
+  if (schema?.type === "object") return {};
+  return `sample_${name}`;
+}
+
+function buildSampleBody(requestBody) {
+  const content = requestBody?.content?.["application/json"] || Object.values(requestBody?.content || {})[0];
+  const schema = content?.schema;
+  if (!schema) return "";
+  const props = schema.properties || {};
+  const required = new Set(schema.required || []);
+  const body = {};
+
+  Object.entries(props).forEach(([name, prop]) => {
+    if (required.has(name) || Object.keys(props).length <= 5) {
+      body[name] = getSampleValue(prop, name);
+    }
+  });
+
+  return JSON.stringify(Object.keys(body).length ? body : getSampleValue(schema), null, 2);
+}
+
+function buildResponsePresets(operation) {
+  return Object.entries(operation?.responses || {}).map(([code, response]) => ({
+    code,
+    label: response?.description || `HTTP ${code}`,
+    body: response?.content?.["application/json"]?.schema ? "Schema available in OpenAPI" : response?.description || "",
+  }));
+}
+
 export function buildEndpointsFromOpenApi(schema) {
   return Object.entries(schema?.paths || {})
     .flatMap(([path, operations]) =>
-      Object.keys(operations || {})
-        .filter((method) => HTTP_METHODS.has(method))
-        .map((method) => ({
+      Object.entries(operations || {})
+        .filter(([method]) => HTTP_METHODS.has(method))
+        .map(([method, operation]) => ({
           method: method.toUpperCase(),
           path,
+          service: getEndpointService(path),
+          summary: operation.summary || operation.operationId || "",
+          parameters: operation.parameters || [],
+          bodyTemplate: buildSampleBody(operation.requestBody),
+          presets: buildResponsePresets(operation),
+          authRequired: (operation.security || []).length > 0 || path.includes("/admin") || path.includes("/users"),
         })),
     )
-    .sort((a, b) => `${a.path}:${a.method}`.localeCompare(`${b.path}:${b.method}`));
+    .filter((endpoint) => !endpoint.path.includes('/api/admin/commands'))
+    .sort((a, b) => `${a.service}:${a.path}:${a.method}`.localeCompare(`${b.service}:${b.path}:${b.method}`));
+}
+
+export function groupEndpointsByService(endpoints) {
+  const groups = new Map();
+  endpoints.forEach((endpoint) => {
+    const service = endpoint.service || getEndpointService(endpoint.path);
+    if (!groups.has(service)) groups.set(service, []);
+    groups.get(service).push(endpoint);
+  });
+
+  return [...groups.entries()].map(([service, items]) => ({
+    service,
+    title: service === "system" ? "system" : `api/${service}`,
+    endpoints: items,
+  }));
 }
 
 export function buildServiceRows(t, frontend, backend, database) {

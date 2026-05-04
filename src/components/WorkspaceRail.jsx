@@ -1,4 +1,4 @@
-import { getInitials } from "./workspaceUtils";
+import { getInitials } from "../utils/workspaceUtils";
 
 export default function WorkspaceRail({ projectName, spaces, activeSpace, onSpaceChange }) {
   return (

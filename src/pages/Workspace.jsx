@@ -1,8 +1,11 @@
 import ChatWorkspace from "../components/ChatWorkspace";
 import "../styles/workspace.css";
 
-export default function Workspace({ profile, projectName, featureFlags }) {
+export default function Workspace({ profile, projectName, featureFlags, version }) {
   return (
-    <ChatWorkspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
+    <div className="workspace-page-shell">
+      <ChatWorkspace profile={profile} projectName={projectName} featureFlags={featureFlags} />
+      {version && <div className="workspace-version">{version}</div>}
+    </div>
   );
 }

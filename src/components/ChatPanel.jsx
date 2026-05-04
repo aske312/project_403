@@ -1,4 +1,4 @@
-import { getInitials, getProfileName } from "./workspaceUtils";
+import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
 export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend }) {
   const profileName = getProfileName(profile);

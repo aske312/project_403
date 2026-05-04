@@ -6,11 +6,6 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 
-from app.admin_commands import (
-    list_admin_commands,
-    queue_admin_command,
-    read_admin_command_state,
-)
 from app.api.auth.login import get_current_user, get_optional_current_user
 from app.db.models import User
 from app.db.session import get_database_backend, get_public_database_url
@@ -38,16 +33,6 @@ def get_package_stack(package_name):
         "name": package_metadata["Name"],
         "version": version(package_name),
     }
-
-
-async def require_admin_user(current_user: User = Depends(get_current_user)):
-    if not is_feature_enabled("admin_commands", current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin command access is disabled by feature policy.",
-        )
-
-    return current_user
 
 
 async def require_admin_logs_user(current_user: User = Depends(get_current_user)):
@@ -82,7 +67,6 @@ async def health(current_user: User | None = Depends(get_optional_current_user))
         "online_users": get_online_user_count(),
         "branch": param.PROJECT_BRANCH,
         "environment": param.ENVIRONMENTS,
-        "admin_commands_enabled": feature_flags.get("admin_commands", False),
         "feature_flags": feature_flags,
         "integrations": {
             "docker_services_enabled": param.DOCKER_SERVICES_ENABLED,
@@ -137,7 +121,10 @@ def list_logs(
 
     logs = []
     seen_paths = set()
-    for log_path in log_root.rglob("*.log"):
+    build_log_root = log_root / param.BUILD_ID
+    search_root = build_log_root if build_log_root.exists() else log_root
+
+    for log_path in search_root.rglob("*.log"):
         if not log_path.is_file():
             continue
 
@@ -149,6 +136,8 @@ def list_logs(
         stat = log_path.stat()
         relative_path = log_path.relative_to(log_root).as_posix()
         relative_parts = Path(relative_path).parts
+        if relative_parts and relative_parts[0] != param.BUILD_ID:
+            continue
         date_key = relative_parts[1] if len(relative_parts) >= 3 else "root"
         logs.append(
             {
@@ -176,37 +165,6 @@ def list_logs(
         "page_size": page_size,
         "total": total,
         "total_pages": total_pages,
-    }
-
-
-@router.get("/api/admin/commands")
-async def get_admin_commands(current_user: User = Depends(require_admin_user)):
-    return {
-        "status": "ok",
-        "commands": list_admin_commands(),
-        "pending": read_admin_command_state(),
-        "requested_by": current_user.email,
-    }
-
-
-@router.post("/api/admin/commands/{command_id}")
-async def run_admin_command(command_id: str, current_user: User = Depends(require_admin_user)):
-    command = queue_admin_command(command_id, current_user.email)
-    if not command:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Admin command is not available.",
-        )
-
-    logger.warning(
-        "Admin command queued: command=%s requested_by=%s",
-        command_id,
-        current_user.email,
-    )
-    return {
-        "status": "queued",
-        "command": command,
-        "message": "Command queued for project launcher.",
     }
 
 

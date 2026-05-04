@@ -1475,6 +1475,29 @@ function Initialize-LiveLogOffsets {
     }
 }
 
+function Get-LiveLogColor {
+    param(
+        [string]$Source,
+        [string]$Line,
+        [ConsoleColor]$DefaultColor = [ConsoleColor]::Gray
+    )
+
+    $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
+    if ($Source -match "err" -or $normalized -match "error|exception|traceback|failed|critical") {
+        return [ConsoleColor]::Red
+    }
+    if ($normalized -match "warning|warn|fallback") {
+        return [ConsoleColor]::Yellow
+    }
+    if ($normalized -match "started|ready|running|application startup complete|200 ok|vite") {
+        return [ConsoleColor]::Green
+    }
+    if ($normalized -match "info|http|request|response") {
+        return [ConsoleColor]::Cyan
+    }
+    return $DefaultColor
+}
+
 function Write-LiveLogLine {
     param(
         [string]$Source,
@@ -1487,8 +1510,16 @@ function Write-LiveLogLine {
     }
 
     $time = Get-Date -Format "HH:mm:ss"
-    Write-Host ("  [{0}] {1,-12} | " -f $time, $Source) -NoNewline -ForegroundColor DarkGray
-    Write-Host $Line -ForegroundColor $Color
+    $lineColor = Get-LiveLogColor -Source $Source -Line $Line -DefaultColor $Color
+    $sourceColor = [ConsoleColor]::Magenta
+    if ($Source -match "err") {
+        $sourceColor = [ConsoleColor]::Yellow
+    }
+
+    Write-Host ("  [{0}] " -f $time) -NoNewline -ForegroundColor DarkGray
+    Write-Host ("{0,-12}" -f $Source) -NoNewline -ForegroundColor $sourceColor
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $Line -ForegroundColor $lineColor
 }
 
 function Show-NewLiveLogs {

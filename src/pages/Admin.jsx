@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import AdminAccessPanel from "../components/AdminAccessPanel";
 import AdminApiSection from "../components/AdminApiSection";
-import AdminCommandsSection from "../components/AdminCommandsSection";
 import AdminLogsSection from "../components/AdminLogsSection";
 import AdminServiceOverview from "../components/AdminServiceOverview";
 import AppFooter from "../components/AppFooter";
@@ -14,7 +13,6 @@ import {
   getHealth,
   getLogs,
   getOpenApi,
-  runAdminCommand,
 } from "../utils/apiClient";
 import { adminCopy } from "../utils/adminCopy";
 import { config } from "../config/appConfig";
@@ -54,8 +52,6 @@ export default function Admin() {
     total: 0,
     totalPages: 1,
   });
-  const [commandBusy, setCommandBusy] = useState(null);
-  const [commandFeedback, setCommandFeedback] = useState(null);
   const [refreshingLogs, setRefreshingLogs] = useState(false);
   const [refreshingServices, setRefreshingServices] = useState(false);
   const [loadingServices, setLoadingServices] = useState({
@@ -80,7 +76,6 @@ export default function Admin() {
   const adminServicesVisible = Boolean(featureFlags.admin_services);
   const adminApiVisible = Boolean(featureFlags.admin_api);
   const adminLogsVisible = Boolean(featureFlags.admin_logs);
-  const adminCommandsVisible = Boolean(featureFlags.admin_commands);
   const canViewOnlineUsers = Boolean(featureFlags.footer_online_counter);
 
   const setServiceLoading = useCallback((serviceId, loading) => {
@@ -248,31 +243,6 @@ export default function Admin() {
     };
   }, []);
 
-  async function runRestartCommand(commandId) {
-    if (!window.confirm(t.commandConfirmRestart)) {
-      return;
-    }
-
-    setCommandBusy(commandId);
-    setCommandFeedback(null);
-
-    try {
-      const { payload, response } = await runAdminCommand(commandId, getAccessToken());
-      if (!response.ok) {
-        throw new Error(payload.detail || payload.message || response.statusText);
-      }
-
-      setCommandFeedback({ state: "ok", text: t.commandQueued });
-    } catch (error) {
-      setCommandFeedback({
-        state: "error",
-        text: `${t.commandFailed}: ${error.message}`,
-      });
-    } finally {
-      setCommandBusy(null);
-    }
-  }
-
   async function refreshLogs() {
     setRefreshingLogs(true);
 
@@ -312,12 +282,6 @@ export default function Admin() {
     link.remove();
     window.URL.revokeObjectURL(url);
   }
-
-  const restartOptions = [
-    { id: "restart_project", label: t.commandRestartProject },
-    { id: "restart_backend", label: t.commandRestartBackend },
-    { id: "restart_frontend", label: t.commandRestartFrontend },
-  ];
 
   const serviceRows = useMemo(
     () => {
@@ -373,19 +337,10 @@ export default function Admin() {
               serviceRows={serviceRows}
               onRefresh={refreshServices}
               refreshing={refreshingServices}
-            >
-              {adminCommandsVisible && (
-                <AdminCommandsSection
-                  t={t}
-                  feedback={commandFeedback}
-                  restartOptions={restartOptions}
-                  restartBusy={commandBusy}
-                  onRestart={runRestartCommand}
-                />
-              )}
+>
             </AdminServiceOverview>
           )}
-          {adminApiVisible && <AdminApiSection t={t} endpoints={endpoints} />}
+          {adminApiVisible && <AdminApiSection t={t} endpoints={endpoints} token={getAccessToken()} />}
           {adminLogsVisible && (
             <AdminLogsSection
               t={t}

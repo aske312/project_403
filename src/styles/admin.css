@@ -17,28 +17,28 @@ button {
 .admin-page {
   --ambient-flow-duration: 12s;
   --ambient-flow-easing: ease-in-out;
-  --bg-start: #d8d8d8;
-  --bg-mid: #e2e2e2;
-  --bg-end: #d2d2d2;
-  --text: #1c2738;
-  --muted: #667486;
-  --surface: rgba(226, 226, 226, 0.72);
-  --surface-strong: rgba(238, 238, 238, 0.84);
-  --surface-muted: rgba(212, 212, 212, 0.68);
-  --border: rgba(86, 101, 119, 0.2);
-  --shadow: 0 22px 58px rgba(30, 41, 59, 0.11);
-  --primary: #2563eb;
-  --primary-soft: rgba(37, 99, 235, 0.13);
-  --primary-text: #1d4ed8;
+  --bg-start: #f8fafc;
+  --bg-mid: #eef4ff;
+  --bg-end: #f6f1ff;
+  --text: #182235;
+  --muted: #64748b;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --surface-muted: rgba(241, 245, 249, 0.76);
+  --border: rgba(99, 102, 241, 0.16);
+  --shadow: 0 24px 70px rgba(79, 70, 229, 0.11);
+  --primary: #4f46e5;
+  --primary-soft: rgba(79, 70, 229, 0.12);
+  --primary-text: #4338ca;
   --success: #16a34a;
   --success-soft: rgba(22, 163, 74, 0.14);
-  --success-text: #15803d;
+  --success-text: #0f766e;
   --warning: #f59e0b;
   --warning-soft: rgba(245, 158, 11, 0.17);
   --warning-text: #b45309;
-  --info: #0ea5e9;
-  --info-soft: rgba(14, 165, 233, 0.16);
-  --info-text: #0369a1;
+  --info: #0891b2;
+  --info-soft: rgba(8, 145, 178, 0.12);
+  --info-text: #0e7490;
   --neutral: #64748b;
   --neutral-soft: rgba(100, 116, 139, 0.16);
   --neutral-text: #475569;
@@ -55,9 +55,9 @@ button {
   flex-direction: column;
   color: var(--text);
   background:
-    linear-gradient(115deg, rgba(37, 99, 235, 0.07), transparent 34%),
-    radial-gradient(circle at 16% 8%, rgba(14, 165, 233, 0.055), transparent 26%),
-    radial-gradient(circle at 88% 14%, rgba(22, 163, 74, 0.05), transparent 24%),
+    linear-gradient(115deg, rgba(79, 70, 229, 0.08), transparent 34%),
+    radial-gradient(circle at 16% 8%, rgba(6, 182, 212, 0.1), transparent 28%),
+    radial-gradient(circle at 88% 14%, rgba(168, 85, 247, 0.1), transparent 26%),
     linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 48%, var(--bg-end) 100%);
 }
 
@@ -1116,4 +1116,114 @@ button {
   .method {
     min-width: 54px;
   }
+}
+
+.section-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.api-service-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.api-service-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.api-service-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-service-title h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.api-service-title span {
+  min-width: 28px;
+  min-height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.endpoint-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endpoint-emulator,
+.endpoint-presets {
+  display: grid;
+  gap: 10px;
+}
+
+.endpoint-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.endpoint-field input,
+.endpoint-field textarea,
+.endpoint-presets select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-strong);
+  font: 700 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.endpoint-field input,
+.endpoint-presets select {
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.endpoint-field textarea {
+  resize: vertical;
+  padding: 10px;
+}
+
+.endpoint-run {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--primary);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.compact-json {
+  max-height: 180px;
 }
