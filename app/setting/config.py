@@ -252,6 +252,21 @@ def get_build_id():
         return "local"
 
 
+def resolve_log_file_path(log_dir_name, template_name, default_template, *, version_token, build_token, build_id):
+    log_root = Path(get_str_env("LOG_DIR"))
+    log_dir = get_optional_str_env(log_dir_name, "")
+    template = get_optional_str_env(template_name, default_template) or default_template
+
+    filename = (
+        template.replace("{version}", version_token)
+        .replace("{build}", build_token)
+        .replace("{build_id}", build_id)
+    )
+
+    target_dir = log_root / log_dir if log_dir else log_root
+    return str(target_dir / filename)
+
+
 def get_project_branch():
     return get_str_env("PROJECT_BRANCH")
 
@@ -296,7 +311,8 @@ class Parameters:
     # App
     APP_NAME = get_str_env("APP_NAME")
     APP_VERSION = get_str_env("VERSION")
-    VERSION = f"v.{APP_VERSION} build {get_build_id()}"
+    BUILD_TAG = get_build_id()
+    VERSION = f"v.{APP_VERSION} build {BUILD_TAG}"
     STARTUP_DURATION_MS = None
     DATABASE_STARTUP_DURATION_MS = None
     BUILD_DURATION_MS = (
@@ -327,8 +343,33 @@ class Parameters:
     FEATURE_FLAGS = read_feature_flags_config(FEATURE_FLAGS_FILE)
 
     # Logging
-    LOG_FILE = get_str_env("LOG_FILE")
     LOG_DIR = get_str_env("LOG_DIR")
+    STARTUP_LOG_DIR = get_optional_str_env("STARTUP_LOG_DIR", "start")
+    WORK_LOG_DIR = get_optional_str_env("WORK_LOG_DIR", "work")
+    STARTUP_LOG_TEMPLATE = get_optional_str_env(
+        "STARTUP_LOG_TEMPLATE",
+        "start-app-{version}-{build}-{build_id}.log",
+    )
+    WORK_LOG_TEMPLATE = get_optional_str_env(
+        "WORK_LOG_TEMPLATE",
+        "work-app-{version}-{build}-{build_id}.log",
+    )
+    STARTUP_LOG_FILE = resolve_log_file_path(
+        "STARTUP_LOG_DIR",
+        "STARTUP_LOG_TEMPLATE",
+        STARTUP_LOG_TEMPLATE,
+        version_token=f"v.{APP_VERSION}",
+        build_token=BUILD_TAG,
+        build_id=get_str_env("BUILD_ID"),
+    )
+    LOG_FILE = resolve_log_file_path(
+        "WORK_LOG_DIR",
+        "WORK_LOG_TEMPLATE",
+        WORK_LOG_TEMPLATE,
+        version_token=f"v.{APP_VERSION}",
+        build_token=BUILD_TAG,
+        build_id=get_str_env("BUILD_ID"),
+    )
     LOG_MAX_BYTES = get_int_env("LOG_MAX_BYTES")
     LOG_BACKUP_COUNT = get_int_env("LOG_BACKUP_COUNT")
 

@@ -848,8 +848,6 @@ $StartupLogTemplate = Get-DotEnvValue $envSettings @("STARTUP_LOG_TEMPLATE", "ST
 $WorkLogTemplate = Get-DotEnvValue $envSettings @("WORK_LOG_TEMPLATE", "WORKER_LOG_TEMPLATE") "work-app-{version}-{build}-{build_id}.log"
 $StartupLogFile = Resolve-LogTemplate -Template $StartupLogTemplate -DefaultTemplate "start-app-{version}-{build}-{build_id}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $StartupLogDirPath
 $AppLogFile = Resolve-LogTemplate -Template $WorkLogTemplate -DefaultTemplate "work-app-{version}-{build}-{build_id}.log" -Version $AppVersion -BuildTag $BuildTag -BuildId $BuildId -Stamp $StartupStamp -Directory $WorkLogDirPath
-$env:LOG_DIR = $LogRoot
-$env:LOG_FILE = $AppLogFile
 Write-LauncherLog "Startup log: $StartupLogFile"
 Set-LauncherStatus 0 "launcher" "boot"
 $StartupCreatedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
