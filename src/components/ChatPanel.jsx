@@ -1,26 +1,32 @@
+import { useEffect, useRef } from "react";
 import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
-export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend, typingUser, onToggleDetails }) {
+export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend, typingUser }) {
   const profileName = getProfileName(profile);
-  const isDirect = activeThread.type === "direct";
+  const feedRef = useRef(null);
+
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [messages.length, activeThread.id]);
 
   return (
     <main className="chat-panel">
       <header className="chat-panel-head">
-        <button className="chat-title-button" type="button" onClick={onToggleDetails} aria-label="Открыть информацию о чате">
+        <div className="chat-title-button">
           <span className={`thread-avatar ${activeThread.status}`}>{getInitials(activeThread.name)}</span>
           <span>
-            <p className="workspace-kicker">{isDirect ? "Direct message" : activeThread.type}</p>
+            <p className="workspace-kicker">Direct message</p>
             <h2>{activeThread.name}</h2>
-            <small>{isDirect ? "Нажмите на название, чтобы открыть карточку собеседника" : activeThread.topic}</small>
+            <small>{activeThread.topic || "Личный диалог в DEV-сборке"}</small>
           </span>
-        </button>
+        </div>
       </header>
 
-      <div className="message-feed">
+      <div className="message-feed" ref={feedRef}>
         {messages.map((message) => (
           <article key={message.id} className={message.own ? "message-row own" : "message-row"}>
-            <span className="message-avatar">{getInitials(message.author)}</span>
+            <span className="message-avatar">{getInitials(message.own ? profileName : message.author)}</span>
             <div className="message-bubble">
               <div className="message-author-line">
                 <strong>{message.own ? profileName : message.author}</strong>

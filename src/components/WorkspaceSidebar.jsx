@@ -1,14 +1,22 @@
 import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
+function getProfileTag(profile) {
+  if (!profile) return "@guest";
+  return profile.tag || (profile.handle ? `@${profile.handle}` : profile.email || "@user");
+}
+
 export default function WorkspaceSidebar({ profile, threads, activeThreadId, liveStatus, onThreadChange, onOpenSettings, onCreateChat }) {
   const profileName = getProfileName(profile);
+  const profileTag = getProfileTag(profile);
 
   return (
     <aside className="workspace-sidebar">
-      <div className="workspace-sidebar-head">
-        <div className="workspace-profile-title">
-          <p className="workspace-kicker">Вы вошли как</p>
+      <div className="workspace-profile-card">
+        <span className="workspace-profile-avatar">{getInitials(profileName)}</span>
+        <div className="workspace-profile-meta">
+          <p className="workspace-kicker">Ваш профиль</p>
           <h1>{profileName}</h1>
+          <span>{profileTag}</span>
         </div>
         <div className="workspace-sidebar-actions">
           <button className="workspace-icon-button" type="button" aria-label="Настройки" onClick={onOpenSettings}>⚙</button>
@@ -18,12 +26,12 @@ export default function WorkspaceSidebar({ profile, threads, activeThreadId, liv
 
       <div className="workspace-search">
         <span aria-hidden="true">⌕</span>
-        <input type="search" placeholder="Поиск чатов" />
+        <input type="search" placeholder="Найти диалог" />
       </div>
 
       <div className="workspace-live-status">
         <span className={`workspace-live-dot ${liveStatus || "idle"}`} />
-        <span>{liveStatus === "realtime" ? "WebSocket активен" : liveStatus === "http" ? "HTTP fallback" : "Синхронизация"}</span>
+        <span>{liveStatus === "realtime" ? "WebSocket active" : liveStatus === "http" ? "HTTP fallback" : "Подключение"}</span>
       </div>
 
       <div className="thread-section-title">Direct messages</div>

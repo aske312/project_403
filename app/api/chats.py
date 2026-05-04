@@ -78,7 +78,10 @@ class ChatConnectionManager:
         for socket in sockets:
             try:
                 await socket.send_json(payload)
-            except RuntimeError:
+            except (RuntimeError, WebSocketDisconnect):
+                self.disconnect(user_id, socket)
+            except Exception as exc:
+                logger.info("Dropped stale websocket for user_id=%s: %s", user_id, exc)
                 self.disconnect(user_id, socket)
 
     async def broadcast_to_chat_members(self, chat: Chat, payload: dict, *, except_user_id: int | None = None):
@@ -89,6 +92,10 @@ class ChatConnectionManager:
 
 
 manager = ChatConnectionManager()
+
+
+def get_chat_member_ids(chat: Chat) -> list[int]:
+    return [member.user_id for member in chat.members]
 
 
 def make_member_response(user: User) -> ChatMemberResponse:
@@ -107,13 +114,14 @@ def make_message_response(message: Message, current_user: User) -> ChatMessageRe
         id=message.id,
         chat_id=message.chat_id,
         sender=make_member_response(message.sender),
-        body=decrypt_message_body(message.body),
+        body=decrypt_message_body(message.body, chat_id=message.chat_id, member_ids=get_chat_member_ids(message.chat)),
         created_at=message.created_at,
         own=message.sender_id == current_user.id,
     )
 
 
-def make_message_event(message: Message, receiver: User) -> dict:
+def make_message_event(message: Message, receiver: User, chat: Chat) -> dict:
+    message.chat = chat
     return {
         "type": "message",
         "message": make_message_response(message, receiver).model_dump(mode="json"),
@@ -172,10 +180,11 @@ async def get_user_chat(db: AsyncSession, chat_id: int, current_user: User) -> C
 
 async def create_chat_message(db: AsyncSession, chat_id: int, text: str, current_user: User) -> tuple[Chat, Message]:
     chat = await get_user_chat(db, chat_id, current_user)
-    message = Message(chat_id=chat.id, sender_id=current_user.id, body=encrypt_message_body(text))
+    message = Message(chat_id=chat.id, sender_id=current_user.id, body=encrypt_message_body(text, chat_id=chat.id, member_ids=get_chat_member_ids(chat)))
     db.add(message)
     await db.commit()
     await db.refresh(message, attribute_names=["sender"])
+    message.chat = chat
     return chat, message
 
 
@@ -233,7 +242,7 @@ async def create_message(
 
     for member in chat.members:
         receiver = member.user
-        await manager.send_to_user(receiver.id, make_message_event(message, receiver))
+        await manager.send_to_user(receiver.id, make_message_event(message, receiver, chat))
 
     return {"status": "ok", "message": response_message}
 
@@ -244,28 +253,32 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
         await websocket.close(code=1008)
         return
 
+    current_user = None
+    connected = False
+
     async with SessionLocal() as db:
-        current_user = await get_user_by_token(token, db)
-        if not current_user:
-            await websocket.close(code=1008)
-            return
-
-        await manager.connect(current_user.id, websocket)
-        await websocket.send_json({"type": "ready", "user_id": current_user.id})
-
         try:
+            current_user = await get_user_by_token(token, db)
+            if not current_user:
+                await websocket.close(code=1008)
+                return
+
+            await manager.connect(current_user.id, websocket)
+            connected = True
+            await websocket.send_json({"type": "ready", "user_id": current_user.id})
+
             while True:
                 raw = await websocket.receive_text()
                 try:
                     payload = json.loads(raw)
                 except json.JSONDecodeError:
-                    await websocket.send_json({"type": "error", "detail": "Invalid JSON."})
+                    await manager.send_to_user(current_user.id, {"type": "error", "detail": "Invalid JSON."})
                     continue
 
                 event_type = payload.get("type")
                 chat_id = int(payload.get("chat_id") or 0)
                 if not chat_id:
-                    await websocket.send_json({"type": "error", "detail": "chat_id is required."})
+                    await manager.send_to_user(current_user.id, {"type": "error", "detail": "chat_id is required."})
                     continue
 
                 chat = await get_user_chat(db, chat_id, current_user)
@@ -286,20 +299,24 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                 if event_type == "message":
                     text = decode_client_payload(payload.get("encoded_body") or payload.get("body") or "").strip()
                     if not text:
-                        await websocket.send_json({"type": "error", "detail": "Message body is required."})
+                        await manager.send_to_user(current_user.id, {"type": "error", "detail": "Message body is required."})
                         continue
 
                     chat, message = await create_chat_message(db, chat.id, text[:4000], current_user)
                     for member in chat.members:
                         receiver = member.user
-                        await manager.send_to_user(receiver.id, make_message_event(message, receiver))
+                        await manager.send_to_user(receiver.id, make_message_event(message, receiver, chat))
                     continue
 
-                await websocket.send_json({"type": "error", "detail": "Unsupported event type."})
+                await manager.send_to_user(current_user.id, {"type": "error", "detail": "Unsupported event type."})
         except WebSocketDisconnect:
-            manager.disconnect(current_user.id, websocket)
+            logger.info("Chat websocket disconnected user_id=%s", getattr(current_user, "id", "unknown"))
+        except RuntimeError as exc:
+            logger.info("Chat websocket closed before response user_id=%s: %s", getattr(current_user, "id", "unknown"), exc)
         except Exception as exc:
             logger.exception("Chat websocket failed: %s", exc)
-            manager.disconnect(current_user.id, websocket)
             with suppress(Exception):
                 await websocket.close(code=1011)
+        finally:
+            if connected and current_user:
+                manager.disconnect(current_user.id, websocket)

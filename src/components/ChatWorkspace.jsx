@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ChatPanel from "./ChatPanel";
-import WorkspaceDetails from "./WorkspaceDetails";
-import WorkspaceRail from "./WorkspaceRail";
 import WorkspaceSidebar from "./WorkspaceSidebar";
-import { spaces, threads as staticThreads } from "../utils/workspaceData";
+import { threads as staticThreads } from "../utils/workspaceData";
 import { getAccessToken } from "../utils/useAuthSession";
 import { encodeWireBody, getChats, getWebSocketUrl, sendChatMessage } from "../utils/apiClient";
 
@@ -16,17 +14,16 @@ function formatMessageTime(value) {
 }
 
 function mapLiveChatToThread(chat) {
-  const otherMembers = (chat.members || []).filter((member) => !chat.messages?.some((message) => message.own && message.sender.id === member.id));
-  const fallbackMember = otherMembers[0] || chat.members?.[0];
+  const fallbackMember = (chat.members || [])[0];
   return {
     id: `live-${chat.id}`,
     liveChatId: chat.id,
     space: "direct",
     type: "direct",
     name: chat.title || fallbackMember?.name || "DEV чат",
-    topic: "Живой DEV-чат через backend + SQLite/PostgreSQL",
+    topic: "Живой DEV-чат. Сообщения хранятся в зашифрованном виде.",
     status: "online",
-    badge: chat.messages?.length || 0,
+    unread: 0,
     members: chat.members?.map((member) => member.name) || [],
     messages: (chat.messages || []).map((message) => ({
       id: `live-message-${message.id}`,
@@ -39,15 +36,26 @@ function mapLiveChatToThread(chat) {
   };
 }
 
-export default function ChatWorkspace({ profile, projectName, featureFlags = {}, environment = "dev", integrations = {} }) {
-  const [space, setSpace] = useState("team");
+export default function ChatWorkspace({
+  profile,
+  featureFlags = {},
+  environment = "dev",
+  integrations = {},
+  theme = "light",
+  lang = "RU",
+  t = {},
+  adminLinkVisible = false,
+  adminLinkLabel = "Admin",
+  onToggleLang,
+  onToggleTheme,
+  onLogout,
+}) {
   const [activeThreadId, setActiveThreadId] = useState("general");
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState({});
   const [liveThreads, setLiveThreads] = useState([]);
   const [liveStatus, setLiveStatus] = useState("idle");
   const [typingUsers, setTypingUsers] = useState({});
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createChatOpen, setCreateChatOpen] = useState(false);
   const socketRef = useRef(null);
@@ -59,6 +67,8 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
     if (!liveChatEnabled || !profile) return undefined;
 
     let ignore = false;
+    let reconnectTimer = null;
+
     async function loadLiveChats() {
       setLiveStatus("loading");
       try {
@@ -67,12 +77,11 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
           const nextThreads = (payload.chats || []).map(mapLiveChatToThread);
           setLiveThreads(nextThreads);
           if (nextThreads.length > 0) {
-            setSpace("direct");
             setActiveThreadId((current) => (
               nextThreads.some((thread) => thread.id === current) ? current : nextThreads[0].id
             ));
           }
-          setLiveStatus("ready");
+          setLiveStatus(websocketEnabled ? "ready" : "http");
         } else if (!ignore) {
           setLiveStatus("fallback");
         }
@@ -81,85 +90,87 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
       }
     }
 
-    loadLiveChats();
+    function connectWebSocket() {
+      const token = getAccessToken();
+      if (!token || !websocketEnabled || ignore) return;
 
-    const token = getAccessToken();
-    if (!token) return () => { ignore = true; };
+      const ws = new WebSocket(getWebSocketUrl("/api/chats/ws", token));
+      socketRef.current = ws;
 
-    if (!websocketEnabled) {
-      const statusTimer = window.setTimeout(() => setLiveStatus("http"), 0);
-      return () => {
-        ignore = true;
-        window.clearTimeout(statusTimer);
-      };
+      ws.addEventListener("open", () => setLiveStatus("realtime"));
+      ws.addEventListener("close", () => {
+        if (ignore) return;
+        setLiveStatus("fallback");
+        reconnectTimer = window.setTimeout(connectWebSocket, 1800);
+      });
+      ws.addEventListener("error", () => {
+        if (!ignore) setLiveStatus("fallback");
+      });
+      ws.addEventListener("message", (event) => {
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (payload.type === "message" && payload.message) {
+          setLiveThreads((current) => current.map((thread) => {
+            if (thread.liveChatId !== payload.message.chat_id) return thread;
+            const exists = thread.messages.some((message) => message.id === `live-message-${payload.message.id}`);
+            if (exists) return thread;
+            return {
+              ...thread,
+              unread: payload.message.own ? thread.unread : thread.unread + 1,
+              messages: [
+                ...thread.messages,
+                {
+                  id: `live-message-${payload.message.id}`,
+                  author: payload.message.sender?.name || payload.message.sender?.handle || "User",
+                  own: Boolean(payload.message.own),
+                  role: payload.message.sender?.role || "user",
+                  time: formatMessageTime(payload.message.created_at),
+                  text: payload.message.body,
+                },
+              ],
+            };
+          }));
+          setTypingUsers((current) => ({ ...current, [payload.message.chat_id]: null }));
+        }
+
+        if (payload.type === "typing") {
+          setTypingUsers((current) => ({
+            ...current,
+            [payload.chat_id]: payload.typing ? payload.user?.name : null,
+          }));
+        }
+      });
     }
 
-    const ws = new WebSocket(getWebSocketUrl("/api/chats/ws", token));
-    socketRef.current = ws;
-
-    ws.addEventListener("open", () => setLiveStatus("realtime"));
-    ws.addEventListener("close", () => setLiveStatus("fallback"));
-    ws.addEventListener("message", (event) => {
-      const payload = JSON.parse(event.data);
-
-      if (payload.type === "message" && payload.message) {
-        setLiveThreads((current) => current.map((thread) => {
-          if (thread.liveChatId !== payload.message.chat_id) return thread;
-          const exists = thread.messages.some((message) => message.id === `live-message-${payload.message.id}`);
-          if (exists) return thread;
-          return {
-            ...thread,
-            badge: thread.badge + 1,
-            messages: [
-              ...thread.messages,
-              {
-                id: `live-message-${payload.message.id}`,
-                author: payload.message.sender?.name || payload.message.sender?.handle || "User",
-                own: Boolean(payload.message.own),
-                role: payload.message.sender?.role || "user",
-                time: formatMessageTime(payload.message.created_at),
-                text: payload.message.body,
-              },
-            ],
-          };
-        }));
-        setTypingUsers((current) => ({ ...current, [payload.message.chat_id]: null }));
-      }
-
-      if (payload.type === "typing") {
-        setTypingUsers((current) => ({
-          ...current,
-          [payload.chat_id]: payload.typing ? payload.user?.name : null,
-        }));
-      }
-    });
+    loadLiveChats();
+    if (websocketEnabled) connectWebSocket();
 
     return () => {
       ignore = true;
-      ws.close();
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (socketRef.current) socketRef.current.close(1000, "workspace unmount");
       socketRef.current = null;
     };
   }, [liveChatEnabled, profile, websocketEnabled]);
 
-  const threads = useMemo(() => (
-    liveThreads.length > 0 ? [...liveThreads, ...staticThreads] : staticThreads
-  ), [liveThreads]);
+  const threads = useMemo(() => {
+    const directStatic = staticThreads.filter((thread) => thread.space === "direct");
+    return liveThreads.length > 0 ? [...liveThreads, ...directStatic] : directStatic;
+  }, [liveThreads]);
 
-  const enabledSpaces = spaces.filter((item) => {
-    if (item.id === "direct") return Boolean(featureFlags.workspace_direct_messages);
-    if (item.id === "team") return Boolean(featureFlags.workspace_team_channels);
-    if (item.id === "voice") return Boolean(featureFlags.workspace_voice_rooms);
-    return true;
-  });
-  const safeSpace = enabledSpaces.some((item) => item.id === space) ? space : enabledSpaces[0]?.id || "team";
-  const visibleThreads = threads.filter((thread) => thread.space === safeSpace);
-  const activeThread = visibleThreads.find((thread) => thread.id === activeThreadId) || visibleThreads[0] || threads[0];
+  const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0] || staticThreads[0];
   const currentMessages = [...(activeThread.messages || []), ...(localMessages[activeThread.id] || [])];
 
-  const handleSpaceChange = (nextSpace) => {
-    setSpace(nextSpace);
-    const firstThread = threads.find((thread) => thread.space === nextSpace);
-    if (firstThread) setActiveThreadId(firstThread.id);
+  const handleThreadChange = (threadId) => {
+    setActiveThreadId(threadId);
+    setLiveThreads((current) => current.map((thread) => (
+      thread.id === threadId ? { ...thread, unread: 0 } : thread
+    )));
   };
 
   const emitTyping = (typing) => {
@@ -188,7 +199,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
           ...(current[activeThread.id] || []),
           {
             id: optimisticId,
-            author: "You",
+            author: profile?.name || "You",
             own: true,
             role: profile?.role || "user",
             time: "сейчас",
@@ -209,9 +220,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
           setLocalMessages((current) => ({ ...current, [activeThread.id]: [] }));
         } else {
           const { response } = await sendChatMessage(activeThread.liveChatId, text, getAccessToken());
-          if (response.ok) {
-            setLocalMessages((current) => ({ ...current, [activeThread.id]: [] }));
-          }
+          if (response.ok) setLocalMessages((current) => ({ ...current, [activeThread.id]: [] }));
         }
       } catch {
         setLiveStatus("fallback");
@@ -225,7 +234,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
         ...(current[activeThread.id] || []),
         {
           id: `${activeThread.id}-${Date.now()}`,
-          author: "You",
+          author: profile?.name || "You",
           own: true,
           role: profile?.role || "user",
           time: "сейчас",
@@ -237,21 +246,12 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
 
   return (
     <section className="chat-workspace" aria-label="Messenger workspace">
-      <WorkspaceRail
-        projectName={projectName}
-        spaces={enabledSpaces}
-        activeSpace={safeSpace}
-        onSpaceChange={handleSpaceChange}
-      />
       <WorkspaceSidebar
         profile={profile}
-        threads={visibleThreads}
+        threads={threads}
         activeThreadId={activeThread.id}
         liveStatus={liveStatus}
-        onThreadChange={(threadId) => {
-          setActiveThreadId(threadId);
-          setDetailsOpen(false);
-        }}
+        onThreadChange={handleThreadChange}
         onOpenSettings={() => setSettingsOpen(true)}
         onCreateChat={() => setCreateChatOpen(true)}
       />
@@ -264,19 +264,29 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
         onDraftChange={handleDraftChange}
         typingUser={activeThread?.liveChatId ? typingUsers[activeThread.liveChatId] : null}
         onSend={handleSend}
-        onToggleDetails={() => setDetailsOpen((current) => !current)}
       />
-      {featureFlags.workspace_details_panel && detailsOpen && <WorkspaceDetails thread={activeThread} onClose={() => setDetailsOpen(false)} />}
 
       {settingsOpen && (
         <div className="workspace-modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
           <section className="workspace-modal" role="dialog" aria-modal="true" aria-label="Настройки" onMouseDown={(event) => event.stopPropagation()}>
             <button className="details-close" type="button" onClick={() => setSettingsOpen(false)} aria-label="Закрыть настройки">×</button>
             <p className="workspace-kicker">Настройки</p>
-            <h2>Параметры рабочего пространства</h2>
+            <h2>Внешний вид и профиль</h2>
+            <div className="settings-grid settings-grid-actions">
+              <button type="button" onClick={onToggleTheme}>
+                <span>Тема</span>
+                <strong>{theme === "light" ? "Светлая" : "Тёмная"}</strong>
+              </button>
+              <button type="button" onClick={onToggleLang}>
+                <span>Язык</span>
+                <strong>{lang}</strong>
+              </button>
+              {adminLinkVisible && <a href="/admin"><span>Панель</span><strong>{adminLinkLabel}</strong></a>}
+              {onLogout && <button type="button" onClick={onLogout}><span>Сессия</span><strong>{t.logout || "Выйти"}</strong></button>}
+            </div>
             <div className="settings-grid">
-              <div><span>Профиль</span><strong>{profile?.handle || profile?.email || "user"}</strong></div>
               <div><span>Realtime</span><strong>{liveStatus === "realtime" ? "WebSocket" : "HTTP fallback"}</strong></div>
+              <div><span>Сообщения</span><strong>Encrypted at rest</strong></div>
               <div><span>Окружение</span><strong>{environment}</strong></div>
             </div>
           </section>
@@ -289,7 +299,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
             <button className="details-close" type="button" onClick={() => setCreateChatOpen(false)} aria-label="Закрыть создание чата">×</button>
             <p className="workspace-kicker">Новый чат</p>
             <h2>Создание диалога</h2>
-            <p className="workspace-modal-copy">На DEV-этапе активен базовый direct-чат между пользователями проекта. Форма создания будет подключена после модели участников и приглашений.</p>
+            <p className="workspace-modal-copy">На DEV-этапе активен direct-чат между пользователями проекта. Следующим шагом можно добавить поиск пользователя и создание приватных комнат.</p>
           </section>
         </div>
       )}
