@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$RepoUrl = "https://github.com/aske312/project_403.git",
     [string]$ProjectDir = "",
     [switch]$UpdateRepo,
@@ -91,6 +91,137 @@ function Convert-ToLogToken {
     }
 
     return $token
+}
+
+function Write-ProjectBanner {
+    param([string]$Title = "PROJECT 403")
+
+    Clear-Host
+    $script:LastLauncherLineLength = 0
+    $script:SpinnerIndex = 0
+
+    Write-Host ""
+    Write-Host "  +------------------------------------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host ("  |  >> {0,-66}|" -f $Title) -ForegroundColor Cyan
+    Write-Host "  |  Modern project launcher / preparing workspace                         |" -ForegroundColor DarkGray
+    Write-Host "  +------------------------------------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+function Write-ProjectSection {
+    param([string]$Title)
+
+    Write-Host ""
+    Write-Host ("  :: {0}" -f $Title) -ForegroundColor Cyan
+    Write-Host ("  {0}" -f ("-" * 58)) -ForegroundColor DarkCyan
+}
+
+function Write-InfoRow {
+    param(
+        [string]$Name,
+        [string]$Value,
+        [ConsoleColor]$Color = [ConsoleColor]::White
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        $Value = "not configured"
+        $Color = [ConsoleColor]::DarkGray
+    }
+
+    Write-Host ("  | {0,-11}" -f ($Name + ":")) -NoNewline -ForegroundColor DarkGray
+    Write-Host $Value -ForegroundColor $Color
+}
+
+function Get-SpinnerFrame {
+    if ($null -eq $script:SpinnerIndex) {
+        $script:SpinnerIndex = 0
+    }
+
+    $frames = @("|", "/", "-", "\")
+    $frame = $frames[$script:SpinnerIndex % $frames.Count]
+    $script:SpinnerIndex++
+    return $frame
+}
+
+function Clear-LauncherLine {
+    $width = 100
+    try {
+        if ($Host.UI.RawUI.WindowSize.Width -gt 0) {
+            $width = [math]::Max(40, $Host.UI.RawUI.WindowSize.Width - 1)
+        }
+    } catch {
+    }
+
+    $last = if ($null -ne $script:LastLauncherLineLength) { $script:LastLauncherLineLength } else { 0 }
+    $clearWidth = [math]::Max($width, $last + 2)
+    Write-Host -NoNewline ("`r" + (" " * $clearWidth) + "`r")
+    return $width
+}
+
+function Write-LauncherCardFooter {
+    Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan
+}
+
+function Get-MaskedConnectionString {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ""
+    }
+
+    return ($Value -replace "(?<=://[^:/@]+:)[^@]+(?=@)", "******")
+}
+
+function Get-FirstDotEnvValue {
+    param(
+        [hashtable]$Settings,
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        if ($Settings.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace($Settings[$name])) {
+            return $Settings[$name]
+        }
+    }
+
+    return ""
+}
+
+function Get-ServiceAddressSummary {
+    param(
+        [hashtable]$Settings,
+        [string]$Kind,
+        [string]$DefaultHost,
+        [int]$DefaultPort
+    )
+
+    if ($Kind -eq "postgres") {
+        $url = Get-FirstDotEnvValue $Settings @("DATABASE_URL", "POSTGRES_URL", "DB_URL", "SQLALCHEMY_DATABASE_URL")
+        if (-not [string]::IsNullOrWhiteSpace($url)) {
+            return Get-MaskedConnectionString $url
+        }
+
+        $host = Get-DotEnvValue $Settings @("POSTGRES_HOST", "DB_HOST", "DATABASE_HOST") $DefaultHost
+        $port = Get-DotEnvValue $Settings @("POSTGRES_PORT", "DB_PORT", "DATABASE_PORT") "$DefaultPort"
+        $name = Get-FirstDotEnvValue $Settings @("POSTGRES_DB", "DB_NAME", "DATABASE_NAME")
+        if (-not [string]::IsNullOrWhiteSpace($name)) {
+            return "postgresql://$host`:$port/$name"
+        }
+        return "$host`:$port"
+    }
+
+    if ($Kind -eq "redis") {
+        $url = Get-FirstDotEnvValue $Settings @("REDIS_URL", "CACHE_URL")
+        if (-not [string]::IsNullOrWhiteSpace($url)) {
+            return Get-MaskedConnectionString $url
+        }
+
+        $host = Get-DotEnvValue $Settings @("REDIS_HOST") $DefaultHost
+        $port = Get-DotEnvValue $Settings @("REDIS_PORT") "$DefaultPort"
+        return "$host`:$port"
+    }
+
+    return ""
 }
 
 function Format-LogVersion {
@@ -446,7 +577,7 @@ function Install-Docker {
         Invoke-Checked $sudo @("install", "-m", "0755", "-d", "/etc/apt/keyrings")
         Invoke-Checked $sudo @("curl", "-fsSL", "https://download.docker.com/linux/ubuntu/gpg", "-o", "/etc/apt/keyrings/docker.asc")
         Invoke-Checked $sudo @("chmod", "a+r", "/etc/apt/keyrings/docker.asc")
-        Invoke-Checked "sh" @("-c", "echo `"deb [arch=`$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu `$(`. /etc/os-release && echo `"`$VERSION_CODENAME`") stable`" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null")
+        Invoke-Checked "sh" @("-c", 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null')
         Invoke-Checked $sudo @("apt-get", "update")
         Invoke-Checked $sudo @("apt-get", "install", "-y", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin")
     } else {
@@ -455,7 +586,7 @@ function Install-Docker {
         Invoke-Checked "install" @("-m", "0755", "-d", "/etc/apt/keyrings")
         Invoke-Checked "curl" @("-fsSL", "https://download.docker.com/linux/ubuntu/gpg", "-o", "/etc/apt/keyrings/docker.asc")
         Invoke-Checked "chmod" @("a+r", "/etc/apt/keyrings/docker.asc")
-        Invoke-Checked "sh" @("-c", "echo `"deb [arch=`$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu `$(`. /etc/os-release && echo `"`$VERSION_CODENAME`") stable`" | tee /etc/apt/sources.list.d/docker.list > /dev/null")
+        Invoke-Checked "sh" @("-c", 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null')
         Invoke-Checked "apt-get" @("update")
         Invoke-Checked "apt-get" @("install", "-y", "docker-ce", "docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin")
     }
@@ -678,6 +809,7 @@ function Start-Redis {
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+Write-ProjectBanner "PROJECT 403"
 
 $script:launcherStart = Get-Date
 
@@ -698,16 +830,34 @@ function Set-LauncherStatus {
     $line = "[{0}] [{1,3}%] {2}: {3}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Percent, $Stage, $Message
     Add-Content -LiteralPath $StartupLogFile -Value $line -Encoding utf8
 
-    $barWidth = 18
-    $filled = [math]::Round(($Percent / 100) * $barWidth)
+    $barWidth = 32
+    $safePercent = [math]::Min([math]::Max($Percent, 0), 100)
+    $filled = [math]::Floor(($safePercent / 100) * $barWidth)
     $empty = $barWidth - $filled
-    $bar = ("=" * [math]::Max($filled, 0)) + ("." * [math]::Max($empty, 0))
-    $status = "[{0}] {1,3}% [{2}] {3}" -f $bar, $Percent, $Stage, $Message
-    if ($Percent -ge 100) {
-        Write-Host ("`r{0}" -f $status)
-    } else {
-        Write-Host -NoNewline ("`r{0}" -f $status)
+    $bar = ("#" * [math]::Max($filled, 0)) + ("-" * [math]::Max($empty, 0))
+    $spinner = if ($safePercent -ge 100) { "OK" } else { Get-SpinnerFrame }
+
+    $stageText = $Stage.ToUpperInvariant()
+    $messageText = $Message
+    $elapsed = [int]((Get-Date) - $script:launcherStart).TotalSeconds
+    $status = "  {0,2}  [{1}] {2,3}%  {3,-10}  {4,-22} {5,4}s" -f $spinner, $bar, $safePercent, $stageText, $messageText, $elapsed
+
+    $windowWidth = Clear-LauncherLine
+    if ($status.Length -gt $windowWidth) {
+        $status = $status.Substring(0, $windowWidth)
     }
+
+    $script:LastLauncherLineLength = $status.Length
+    if ($safePercent -ge 100) {
+        Write-Host $status -ForegroundColor Green
+    } else {
+        Write-Host -NoNewline $status -ForegroundColor Cyan
+    }
+}
+
+function Complete-LauncherProgressLine {
+    Clear-LauncherLine | Out-Null
+    $script:LastLauncherLineLength = 0
 }
 
 function Write-Step {
@@ -737,8 +887,8 @@ function Wait-ForHttpEndpoint {
         [int]$TimeoutSeconds = 120
     )
 
-    Set-LauncherStatus $PercentStart $Label "waiting"
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $startedAt = Get-Date
 
     while ((Get-Date) -lt $deadline) {
         if ($null -ne $Process) {
@@ -753,7 +903,11 @@ function Wait-ForHttpEndpoint {
             return
         }
 
-        Start-Sleep -Seconds 1
+        $elapsedWait = [math]::Max(0, ((Get-Date) - $startedAt).TotalSeconds)
+        $ratio = [math]::Min(0.92, $elapsedWait / [math]::Max(1, $TimeoutSeconds))
+        $animatedPercent = [int]($PercentStart + (($PercentReady - $PercentStart - 1) * $ratio))
+        Set-LauncherStatus $animatedPercent $Label "warming up"
+        Start-Sleep -Milliseconds 180
     }
 
     throw "$Label did not become ready at $Url within $TimeoutSeconds seconds."
@@ -779,8 +933,8 @@ function Wait-ForDockerHealthy {
         [int]$TimeoutSeconds = 120
     )
 
-    Set-LauncherStatus $PercentStart $Label "waiting"
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $startedAt = Get-Date
 
     while ((Get-Date) -lt $deadline) {
         if (Test-DockerHealthy $ContainerName) {
@@ -788,7 +942,11 @@ function Wait-ForDockerHealthy {
             return
         }
 
-        Start-Sleep -Seconds 1
+        $elapsedWait = [math]::Max(0, ((Get-Date) - $startedAt).TotalSeconds)
+        $ratio = [math]::Min(0.92, $elapsedWait / [math]::Max(1, $TimeoutSeconds))
+        $animatedPercent = [int]($PercentStart + (($PercentReady - $PercentStart - 1) * $ratio))
+        Set-LauncherStatus $animatedPercent $Label "warming up"
+        Start-Sleep -Milliseconds 180
     }
 
     throw "$Label did not become healthy within $TimeoutSeconds seconds."
@@ -852,9 +1010,15 @@ $env:LOG_STAMP = $StartupStamp
 $StartupLogFile = Resolve-LogTemplate -Kind "build" -Template $StartupLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
 $AppLogFile = Resolve-LogTemplate -Kind "start" -Template $WorkLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
 $DbLogFile = Resolve-LogTemplate -Kind "db" -Template $DbLogTemplate -DefaultTemplate "{version}-({stamp}).log" -Version $AppVersion -Stamp $StartupStamp -Directory $StartupBaseDirPath
+$BackendConsoleLogFile = Join-Path $StartupBaseDirPath "backend-console.log"
+$BackendErrorLogFile = Join-Path $StartupBaseDirPath "backend-error.log"
+$FrontendConsoleLogFile = Join-Path $StartupBaseDirPath "frontend-console.log"
+$FrontendErrorLogFile = Join-Path $StartupBaseDirPath "frontend-error.log"
 Write-LauncherLog "Startup log: $StartupLogFile"
 Write-LauncherLog "Work log: $AppLogFile"
 Write-LauncherLog "DB log: $DbLogFile"
+Write-LauncherLog "Backend console log: $BackendConsoleLogFile"
+Write-LauncherLog "Frontend console log: $FrontendConsoleLogFile"
 Set-LauncherStatus 0 "launcher" "boot"
 $StartupCreatedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 Write-LauncherLog ("Startup metadata: time={0}; version={1}; build={2}" -f $StartupCreatedAt, $AppVersion, $BuildId)
@@ -890,24 +1054,21 @@ if ($UpdateRepo) {
 }
 
 Set-LauncherStatus 10 "launcher" "environment loaded"
-Write-Host ""
 
 if ($StartDb -or $DbOnly) {
     Set-LauncherStatus 20 "postgres" "starting"
-    Write-Host ""
     Start-Database
     Wait-ForDockerHealthy -ContainerName "project_403_postgres" -Label "postgres" -PercentStart 24 -PercentReady 30
 }
 
 if ($DbOnly) {
     Set-LauncherStatus 30 "postgres" "ready"
-    Write-Host ""
+    Complete-LauncherProgressLine
     exit 0
 }
 
 if ($StartRedis -or $RedisOnly) {
     Set-LauncherStatus 32 "redis" "starting"
-    Write-Host ""
     try {
         Start-Redis
         Wait-ForDockerHealthy -ContainerName "project_403_redis" -Label "redis" -PercentStart 36 -PercentReady 40
@@ -915,7 +1076,6 @@ if ($StartRedis -or $RedisOnly) {
         Write-Warning "Redis start failed, continuing without Redis: $($_.Exception.Message)"
         Write-LauncherLog "Redis start failed: $($_.Exception.Message)"
         Set-LauncherStatus 40 "redis" "unavailable"
-        Write-Host ""
         if ($RedisOnly) {
             throw
         }
@@ -924,26 +1084,22 @@ if ($StartRedis -or $RedisOnly) {
 
 if ($RedisOnly) {
     Set-LauncherStatus 40 "redis" "ready"
-    Write-Host ""
+    Complete-LauncherProgressLine
     exit 0
 }
 
 if (-not $SkipInstall) {
     Set-LauncherStatus 45 "deps" "preparing"
-    Write-Host ""
     if (-not (Test-Path $VenvPython)) {
         Set-LauncherStatus 47 "deps" "creating venv"
-        Write-Host ""
         $basePython = Get-BasePython
         Invoke-LoggedChecked $basePython.File ($basePython.Args + @("-m", "venv", ".venv"))
     }
 
     Set-LauncherStatus 50 "deps" "updating pip"
-    Write-Host ""
     Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "--upgrade", "pip")
 
     Set-LauncherStatus 53 "deps" "installing python"
-    Write-Host ""
     Invoke-LoggedChecked $VenvPython @("-m", "pip", "install", "-r", "requirements.txt")
 
     if (-not (Test-Command $Npm)) {
@@ -952,7 +1108,6 @@ if (-not $SkipInstall) {
 
     if ($ForceInstall -or -not (Test-Path "node_modules")) {
         Set-LauncherStatus 57 "deps" "installing frontend"
-        Write-Host ""
         if (Test-Path "package-lock.json") {
             Invoke-LoggedChecked $Npm @("ci")
         } else {
@@ -960,30 +1115,26 @@ if (-not $SkipInstall) {
         }
     }
     Set-LauncherStatus 60 "deps" "ready"
-    Write-Host ""
 }
 
 if ($InstallOnly) {
     Set-LauncherStatus 60 "launcher" "environment ready"
-    Write-Host ""
+    Complete-LauncherProgressLine
     exit 0
 }
 
 if (-not $SkipBuild) {
     Set-LauncherStatus 65 "frontend" "building"
-    Write-Host ""
     if (Test-BuildOutdated) {
         Set-LauncherStatus 67 "frontend" "bundling"
-        Write-Host ""
         Invoke-LoggedChecked $Npm @("run", "build")
     }
     Set-LauncherStatus 70 "frontend" "build ready"
-    Write-Host ""
 }
 
 if ($BuildOnly) {
     Set-LauncherStatus 70 "launcher" "build ready"
-    Write-Host ""
+    Complete-LauncherProgressLine
     exit 0
 }
 
@@ -1008,14 +1159,16 @@ $frontendArgs = @("run", "dev", "--", "--host", $FrontendHost, "--port", "$Front
 
 function Start-BackendService {
     Write-LauncherLog ("RUN: {0} {1}" -f $VenvPython, ($backendArgs -join " "))
-    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -NoNewWindow -PassThru
+    Add-Content -LiteralPath $BackendConsoleLogFile -Value "`n--- backend started $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ---" -Encoding utf8
+    $process = Start-Process -FilePath $VenvPython -ArgumentList $backendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $BackendConsoleLogFile -RedirectStandardError $BackendErrorLogFile -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
 
 function Start-FrontendService {
     Write-LauncherLog ("RUN: {0} {1}" -f $Npm, ($frontendArgs -join " "))
-    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+    Add-Content -LiteralPath $FrontendConsoleLogFile -Value "`n--- frontend started $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ---" -Encoding utf8
+    $process = Start-Process -FilePath $Npm -ArgumentList $frontendArgs -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $FrontendConsoleLogFile -RedirectStandardError $FrontendErrorLogFile -PassThru
     Add-ProcessTreeToSet -ProcessId $process.Id -Target $startedProcessIds
     return $process
 }
@@ -1120,29 +1273,125 @@ function Invoke-AdminCommand {
 }
 
 Set-LauncherStatus 75 "backend" "starting"
-Write-Host ""
 $backend = Start-BackendService
 Wait-ForHttpEndpoint -Process $backend -Url "http://$BackendHost`:$BackendPort/api/admin/health" -Label "backend" -PercentStart 78 -PercentReady 85
-Write-Host ""
 
 Set-LauncherStatus 88 "frontend" "starting"
-Write-Host ""
 $frontend = Start-FrontendService
 Wait-ForHttpEndpoint -Process $frontend -Url "http://$FrontendHost`:$FrontendPort/__project403/frontend-metrics" -Label "frontend" -PercentStart 90 -PercentReady 96
 
 Set-LauncherStatus 100 "launcher" "project ready"
+Complete-LauncherProgressLine
+
+$BackendUrl = "http://$BackendHost`:$BackendPort"
+$FrontendUrl = "http://$FrontendHost`:$FrontendPort"
+Write-ProjectSection "Project is ready"
+Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan
+Write-Host "  |  Launch complete. Services are online.                    |" -ForegroundColor Green
+Write-Host "  |                                                            |" -ForegroundColor DarkCyan
+Write-InfoRow "Release" "$BuildId v.$AppVersion build $BuildTag" Green
+Write-InfoRow "Frontend" $FrontendUrl Green
+Write-InfoRow "Backend" $BackendUrl Green
+Write-InfoRow "API health" "$BackendUrl/api/admin/health" Green
+Write-InfoRow "Logs" $StartupBaseDirPath DarkGray
+Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkCyan
 Write-Host ""
-Write-Host "Release:  $BuildId v.$AppVersion build $BuildTag is ready" -ForegroundColor Green
-Write-Host "Frontend: http://$FrontendHost`:$FrontendPort" -ForegroundColor Green
-Write-Host "Backend:  http://$BackendHost`:$BackendPort" -ForegroundColor Green
-Write-Host "Database:  " -ForegroundColor Green
+Write-Host "  Ctrl+C - stop backend and frontend" -ForegroundColor DarkGray
+
 Write-Host ""
-Write-Host "$StartupBaseDirPath - file logs" -ForegroundColor DarkGray
-Write-Host "Press Ctrl+C to stop both processes." -ForegroundColor DarkGray
+Write-Host "  Live logs will appear below. Startup visuals will stay clean." -ForegroundColor DarkGray
+Write-Host "  ------------------------------------------------------------" -ForegroundColor DarkCyan
+
+$script:LiveLogOffsets = @{}
+$script:LiveLogFiles = @(
+    [pscustomobject]@{ Name = "backend"; Path = $BackendConsoleLogFile; Color = [ConsoleColor]::Gray },
+    [pscustomobject]@{ Name = "backend:err"; Path = $BackendErrorLogFile; Color = [ConsoleColor]::Yellow },
+    [pscustomobject]@{ Name = "frontend"; Path = $FrontendConsoleLogFile; Color = [ConsoleColor]::Gray },
+    [pscustomobject]@{ Name = "frontend:err"; Path = $FrontendErrorLogFile; Color = [ConsoleColor]::Yellow },
+    [pscustomobject]@{ Name = "app"; Path = $AppLogFile; Color = [ConsoleColor]::DarkGray }
+)
+
+function Initialize-LiveLogOffsets {
+    foreach ($log in $script:LiveLogFiles) {
+        if ([string]::IsNullOrWhiteSpace($log.Path)) {
+            continue
+        }
+
+        if (Test-Path -LiteralPath $log.Path) {
+            try {
+                $script:LiveLogOffsets[$log.Path] = (Get-Item -LiteralPath $log.Path).Length
+            } catch {
+                $script:LiveLogOffsets[$log.Path] = 0
+            }
+        } else {
+            $script:LiveLogOffsets[$log.Path] = 0
+        }
+    }
+}
+
+function Write-LiveLogLine {
+    param(
+        [string]$Source,
+        [string]$Line,
+        [ConsoleColor]$Color = [ConsoleColor]::Gray
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Line)) {
+        return
+    }
+
+    $time = Get-Date -Format "HH:mm:ss"
+    Write-Host ("  [{0}] {1,-12} | " -f $time, $Source) -NoNewline -ForegroundColor DarkGray
+    Write-Host $Line -ForegroundColor $Color
+}
+
+function Show-NewLiveLogs {
+    foreach ($log in $script:LiveLogFiles) {
+        if ([string]::IsNullOrWhiteSpace($log.Path) -or -not (Test-Path -LiteralPath $log.Path)) {
+            continue
+        }
+
+        try {
+            $file = Get-Item -LiteralPath $log.Path
+            $previousOffset = if ($script:LiveLogOffsets.ContainsKey($log.Path)) { [int64]$script:LiveLogOffsets[$log.Path] } else { 0 }
+
+            if ($file.Length -lt $previousOffset) {
+                $previousOffset = 0
+            }
+
+            if ($file.Length -le $previousOffset) {
+                continue
+            }
+
+            $stream = [System.IO.File]::Open($log.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            try {
+                $stream.Seek($previousOffset, [System.IO.SeekOrigin]::Begin) | Out-Null
+                $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8, $true)
+                $text = $reader.ReadToEnd()
+            } finally {
+                $stream.Close()
+            }
+
+            $script:LiveLogOffsets[$log.Path] = $file.Length
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                continue
+            }
+
+            foreach ($line in ($text -split "`r?`n")) {
+                Write-LiveLogLine -Source $log.Name -Line $line -Color $log.Color
+            }
+        } catch {
+            Write-LiveLogLine -Source "launcher" -Line "Could not read log $($log.Path): $($_.Exception.Message)" -Color Yellow
+        }
+    }
+}
+
+Initialize-LiveLogOffsets
 
 try {
     while ($true) {
-        Start-Sleep -Seconds 1
+        Start-Sleep -Milliseconds 350
+        Show-NewLiveLogs
 
         $command = Get-PendingAdminCommand
         if ($null -ne $command) {
