@@ -3,6 +3,7 @@ import re
 import time
 from pathlib import Path
 
+import bcrypt
 from sqlalchemy import event
 from sqlalchemy import select
 from sqlalchemy import text
@@ -10,7 +11,6 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, User
-from app.passwords import hash_password
 from app.setting.config import parameters as param
 
 logger = logging.getLogger(__name__)
@@ -239,6 +239,10 @@ def is_dev_environment():
     return param.ENVIRONMENTS.strip().lower() in {"dev", "development", "local"}
 
 
+def hash_seed_password(password):
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
 def get_seed_name(first_name, last_name):
     return " ".join([first_name, last_name or ""]).strip() or first_name or "User"
 
@@ -310,7 +314,7 @@ async def ensure_seed_user(
                 name=full_name,
                 role=role,
                 is_super_admin=is_super_admin,
-                password_hash=hash_password(password),
+                password_hash=hash_seed_password(password),
             )
             db_session.add(user)
         else:
@@ -320,7 +324,7 @@ async def ensure_seed_user(
             user.name = full_name
             user.role = role
             user.is_super_admin = is_super_admin
-            user.password_hash = hash_password(password)
+            user.password_hash = hash_seed_password(password)
 
         await db_session.commit()
         logger.info("DEV %s user ensured: email=%s handle=%s", label, user.email, user.handle)

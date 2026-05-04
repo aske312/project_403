@@ -3,6 +3,7 @@ import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
 import AuthForm from "../components/AuthForm";
 import AuthIntro from "../components/AuthIntro";
+import ChatWorkspace from "../components/ChatWorkspace";
 import { config } from "../config/appConfig";
 import { getHealth, login, register } from "../utils/apiClient";
 import { normalizeEnvironment } from "../utils/environment";
@@ -182,16 +183,20 @@ export default function Home() {
       />
 
       <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
-        <AuthIntro t={t} projectName={projectName} />
-        {!profile && (
-          <AuthForm
-            t={t}
-            mode={mode}
-            status={visibleStatus}
-            submitting={submitting}
-            onModeChange={handleModeChange}
-            onSubmit={handleSubmit}
-          />
+        {profile ? (
+          <ChatWorkspace profile={profile} projectName={projectName} />
+        ) : (
+          <>
+            <AuthIntro t={t} projectName={projectName} />
+            <AuthForm
+              t={t}
+              mode={mode}
+              status={visibleStatus}
+              submitting={submitting}
+              onModeChange={handleModeChange}
+              onSubmit={handleSubmit}
+            />
+          </>
         )}
       </main>
 

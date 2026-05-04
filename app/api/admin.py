@@ -203,12 +203,7 @@ def download_log(
     log_root = get_log_root().resolve()
     target_path = (log_root / log_path).resolve()
 
-    try:
-        target_path.relative_to(log_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid log path.")
-
-    if target_path.suffix != ".log":
+    if not str(target_path).startswith(str(log_root)) or target_path.suffix != ".log":
         raise HTTPException(status_code=400, detail="Invalid log path.")
 
     if not target_path.exists() or not target_path.is_file():

@@ -12,10 +12,6 @@ function sanitizeLogin(value) {
   return value.replace(/[^A-Za-z0-9_@.+-]/g, "").slice(0, loginForm.login.maxLength);
 }
 
-function getUtf8ByteLength(value) {
-  return new TextEncoder().encode(value).length;
-}
-
 function evaluatePassword(value) {
   const checks = [
     value.length >= registrationFormConfig.password.minLength,
@@ -66,7 +62,6 @@ export default function AuthForm({ t, mode, status, submitting, onModeChange, on
 
   const renderPasswordField = (registerMode = false) => {
     const passwordConfig = registerMode ? registrationFormConfig.password : loginForm.password;
-    const maxBytes = passwordConfig.maxBytes;
 
     return (
       <label className="auth-field">
@@ -84,17 +79,7 @@ export default function AuthForm({ t, mode, status, submitting, onModeChange, on
             maxLength={passwordConfig.maxLength}
             pattern={passwordConfig.pattern}
             title={t.passwordHint}
-            onInput={(event) => {
-              const value = event.currentTarget.value;
-              if (maxBytes && getUtf8ByteLength(value) > maxBytes) {
-                event.currentTarget.setCustomValidity(t.passwordTooLong);
-              } else {
-                event.currentTarget.setCustomValidity("");
-              }
-              if (registerMode) {
-                setRegistrationPassword(value);
-              }
-            }}
+            onChange={registerMode ? (event) => setRegistrationPassword(event.currentTarget.value) : undefined}
             required
           />
           <button

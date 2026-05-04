@@ -10,9 +10,8 @@
       },
       "password": {
         "minLength": 8,
-        "maxLength": 72,
-        "maxBytes": 72,
-        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,72}"
+        "maxLength": 128,
+        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,128}"
       }
     },
     "registration": {
@@ -31,9 +30,8 @@
       },
       "password": {
         "minLength": 8,
-        "maxLength": 72,
-        "maxBytes": 72,
-        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,72}",
+        "maxLength": 128,
+        "pattern": "(?=.*[A-Za-z\\u0400-\\u04FF])(?=.*\\d).{8,128}",
         "idealMinLength": 12
       }
     }
