@@ -1,5 +1,6 @@
 import logging
 import re
+from pathlib import Path
 
 import bcrypt
 from sqlalchemy import select
@@ -27,6 +28,7 @@ def make_engine(url):
 engine = make_engine(param.DATABASE_URL)
 active_database_url = param.DATABASE_URL
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+FALLBACK_FEATURE_NAME = "sqlite_database_fallback"
 
 
 def get_public_database_url():
@@ -35,6 +37,34 @@ def get_public_database_url():
 
 def get_database_backend():
     return make_url(active_database_url).get_backend_name()
+
+
+def is_database_fallback_enabled():
+    feature_rules = param.FEATURE_FLAGS.get(FALLBACK_FEATURE_NAME, {})
+    environment_key = "prod" if param.ENVIRONMENTS.strip().lower() in {"prod", "production"} else "dev"
+    environment_rules = feature_rules.get(environment_key, {})
+
+    return param.DB_FALLBACK_ENABLED and environment_rules.get("enabled", False)
+
+
+def get_sqlite_database_path(url):
+    parsed_url = make_url(url)
+    if parsed_url.get_backend_name() != "sqlite":
+        return None
+
+    database = parsed_url.database
+    if not database or database == ":memory:":
+        return None
+
+    return Path(database).expanduser()
+
+
+def fallback_database_exists():
+    sqlite_path = get_sqlite_database_path(param.DB_FALLBACK_URL)
+    if sqlite_path is None:
+        return True
+
+    return sqlite_path.exists() and sqlite_path.is_file()
 
 
 async def create_tables():
@@ -100,13 +130,39 @@ async def ensure_sqlite_column(conn, columns, column_name, column_type):
 async def use_fallback_database():
     global SessionLocal, active_database_url, engine
 
-    if not param.DB_FALLBACK_ENABLED:
+    if not is_database_fallback_enabled():
         raise RuntimeError("Database fallback is disabled.")
+    if not fallback_database_exists():
+        raise RuntimeError("SQLite fallback database file is missing.")
 
+    previous_engine = engine
     active_database_url = param.DB_FALLBACK_URL
     engine = make_engine(active_database_url)
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
-    await create_tables()
+    await previous_engine.dispose()
+
+
+async def check_database_connection():
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+
+
+async def init_active_database(*, create_missing_tables):
+    try:
+        if create_missing_tables:
+            await create_tables()
+        else:
+            await check_database_connection()
+    except Exception as exc:
+        if active_database_url == param.DB_FALLBACK_URL:
+            raise
+
+        logger.warning("Primary database is unavailable, trying fallback database: %s", exc)
+        await use_fallback_database()
+        if create_missing_tables:
+            await create_tables()
+        else:
+            await check_database_connection()
 
 
 def is_dev_environment():
@@ -230,13 +286,7 @@ async def ensure_dev_seed_users():
 
 
 async def init_db():
-    try:
-        await create_tables()
-    except Exception:
-        if active_database_url == param.DB_FALLBACK_URL:
-            raise
-
-        await use_fallback_database()
+    await init_active_database(create_missing_tables=True)
 
     await ensure_dev_seed_users()
 

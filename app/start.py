@@ -5,12 +5,15 @@ import json
 import logging
 import time
 
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.setting.config import parameters as param
 from app.api.auth.login import router as api_auth_login
 from app.api.auth.registration import router as api_auth_registration
 from app.api.db import router as api_db
 from app.api.admin import router as api_admin
-from app.db.session import get_public_database_url, init_db
+from app.db.session import get_public_database_url, init_active_database, init_db
 from app.logging_config import get_request_resource, setup_logging, write_request_log
 from app.runtime_state import mark_runtime_seen, start_runtime_session, stop_runtime_session
 from fastapi.middleware.cors import CORSMiddleware
@@ -79,6 +82,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SERVICE_UNAVAILABLE_DETAIL = "\u0421\u0435\u0440\u0432\u0438\u0441 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d"
+
 
 async def runtime_heartbeat():
     while True:
@@ -115,6 +120,22 @@ async def log_requests(request, call_next):
         response_text = "[response body not logged]"
 
         return response
+    except SQLAlchemyError as exc:
+        status_code = 503
+        response_text = SERVICE_UNAVAILABLE_DETAIL
+        logger.exception("Database error: %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": SERVICE_UNAVAILABLE_DETAIL},
+        )
+    except (ConnectionError, OSError) as exc:
+        status_code = 503
+        response_text = SERVICE_UNAVAILABLE_DETAIL
+        logger.exception("Database connection error: %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": SERVICE_UNAVAILABLE_DETAIL},
+        )
     except Exception as exc:
         response_text = str(exc)[:10000]
         logger.exception("Unhandled backend error: %s %s", request.method, request.url.path)
@@ -170,13 +191,13 @@ async def startup():
             param.PROJECT_BRANCH,
         )
 
-        if not param.AUTO_CREATE_TABLES:
-            logger.info("Database auto-create is disabled")
-            return
-
         database_started = time.perf_counter()
         try:
-            await init_db()
+            if param.AUTO_CREATE_TABLES:
+                await init_db()
+            else:
+                logger.info("Database auto-create is disabled")
+                await init_active_database(create_missing_tables=False)
         except Exception as exc:
             logger.exception("Database initialization skipped: %s", exc)
         else:

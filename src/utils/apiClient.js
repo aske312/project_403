@@ -1,6 +1,7 @@
 import { config } from "../config/appConfig";
 
 export const API_URL = config.app.server.frontendApiUrl;
+export const SERVICE_UNAVAILABLE_MESSAGE = "\u0421\u0435\u0440\u0432\u0438\u0441 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d";
 
 const inFlightJsonRequests = new Map();
 
@@ -42,8 +43,17 @@ function getRequestKey(url, options) {
 
 async function requestJsonFromUrl(url, options) {
   const startedAt = performance.now();
-  const response = await fetch(url, options);
-  const payload = await response.json();
+  let response;
+
+  try {
+    response = await fetch(url, options);
+  } catch {
+    throw new Error(SERVICE_UNAVAILABLE_MESSAGE);
+  }
+
+  const payload = await response.json().catch(() => (
+    response.status === 503 ? { detail: SERVICE_UNAVAILABLE_MESSAGE } : {}
+  ));
   const durationMs = performance.now() - startedAt;
 
   return { response, payload, durationMs };

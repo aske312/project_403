@@ -70,3 +70,15 @@ features:
       anonymous: false
       user: false
       admin: true
+
+  sqlite_database_fallback:
+    dev:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
+    prod:
+      enabled: true
+      anonymous: false
+      user: false
+      admin: true
