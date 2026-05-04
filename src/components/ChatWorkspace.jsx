@@ -47,6 +47,9 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
   const [liveThreads, setLiveThreads] = useState([]);
   const [liveStatus, setLiveStatus] = useState("idle");
   const [typingUsers, setTypingUsers] = useState({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createChatOpen, setCreateChatOpen] = useState(false);
   const socketRef = useRef(null);
 
   const liveChatEnabled = String(environment || "").toLowerCase().includes("dev");
@@ -241,12 +244,16 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
         onSpaceChange={handleSpaceChange}
       />
       <WorkspaceSidebar
-        projectName={projectName}
+        profile={profile}
         threads={visibleThreads}
         activeThreadId={activeThread.id}
-        quickActionsEnabled={Boolean(featureFlags.workspace_quick_actions)}
         liveStatus={liveStatus}
-        onThreadChange={setActiveThreadId}
+        onThreadChange={(threadId) => {
+          setActiveThreadId(threadId);
+          setDetailsOpen(false);
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCreateChat={() => setCreateChatOpen(true)}
       />
       <ChatPanel
         activeThread={activeThread}
@@ -257,8 +264,35 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
         onDraftChange={handleDraftChange}
         typingUser={activeThread?.liveChatId ? typingUsers[activeThread.liveChatId] : null}
         onSend={handleSend}
+        onToggleDetails={() => setDetailsOpen((current) => !current)}
       />
-      {featureFlags.workspace_details_panel && <WorkspaceDetails thread={activeThread} />}
+      {featureFlags.workspace_details_panel && detailsOpen && <WorkspaceDetails thread={activeThread} onClose={() => setDetailsOpen(false)} />}
+
+      {settingsOpen && (
+        <div className="workspace-modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+          <section className="workspace-modal" role="dialog" aria-modal="true" aria-label="Настройки" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="details-close" type="button" onClick={() => setSettingsOpen(false)} aria-label="Закрыть настройки">×</button>
+            <p className="workspace-kicker">Настройки</p>
+            <h2>Параметры рабочего пространства</h2>
+            <div className="settings-grid">
+              <div><span>Профиль</span><strong>{profile?.handle || profile?.email || "user"}</strong></div>
+              <div><span>Realtime</span><strong>{liveStatus === "realtime" ? "WebSocket" : "HTTP fallback"}</strong></div>
+              <div><span>Окружение</span><strong>{environment}</strong></div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {createChatOpen && (
+        <div className="workspace-modal-backdrop" role="presentation" onMouseDown={() => setCreateChatOpen(false)}>
+          <section className="workspace-modal" role="dialog" aria-modal="true" aria-label="Новый чат" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="details-close" type="button" onClick={() => setCreateChatOpen(false)} aria-label="Закрыть создание чата">×</button>
+            <p className="workspace-kicker">Новый чат</p>
+            <h2>Создание диалога</h2>
+            <p className="workspace-modal-copy">На DEV-этапе активен базовый direct-чат между пользователями проекта. Форма создания будет подключена после модели участников и приглашений.</p>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

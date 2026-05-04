@@ -1,20 +1,20 @@
 import { getInitials, getProfileName } from "../utils/workspaceUtils";
 
-export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend, typingUser }) {
+export default function ChatPanel({ activeThread, messages, profile, composerEnabled, draft, onDraftChange, onSend, typingUser, onToggleDetails }) {
   const profileName = getProfileName(profile);
+  const isDirect = activeThread.type === "direct";
 
   return (
     <main className="chat-panel">
       <header className="chat-panel-head">
-        <div>
-          <p className="workspace-kicker">{activeThread.type === "direct" ? "Direct message" : activeThread.type}</p>
-          <h2>{activeThread.name}</h2>
-          <span>{activeThread.topic}</span>
-        </div>
-        <div className="chat-head-actions">
-          <button type="button">Звонок</button>
-          <button type="button">Файлы</button>
-        </div>
+        <button className="chat-title-button" type="button" onClick={onToggleDetails} aria-label="Открыть информацию о чате">
+          <span className={`thread-avatar ${activeThread.status}`}>{getInitials(activeThread.name)}</span>
+          <span>
+            <p className="workspace-kicker">{isDirect ? "Direct message" : activeThread.type}</p>
+            <h2>{activeThread.name}</h2>
+            <small>{isDirect ? "Нажмите на название, чтобы открыть карточку собеседника" : activeThread.topic}</small>
+          </span>
+        </button>
       </header>
 
       <div className="message-feed">
@@ -24,7 +24,6 @@ export default function ChatPanel({ activeThread, messages, profile, composerEna
             <div className="message-bubble">
               <div className="message-author-line">
                 <strong>{message.own ? profileName : message.author}</strong>
-                <span>{message.role}</span>
                 <time>{message.time}</time>
               </div>
               <p>{message.text}</p>
@@ -41,7 +40,7 @@ export default function ChatPanel({ activeThread, messages, profile, composerEna
           <input
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
-            placeholder={`Сообщение в ${activeThread.name}`}
+            placeholder={`Сообщение для ${activeThread.name}`}
           />
           <button type="submit">Отправить</button>
         </form>
