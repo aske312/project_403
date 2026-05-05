@@ -153,7 +153,13 @@ export default function ChatWorkspace({ profile, projectName = "Project 403", fe
     const ws = new WebSocket(getWebSocketUrl("/api/chats/ws", token));
     socketRef.current = ws;
     ws.addEventListener("message", (event) => {
-      const payload = JSON.parse(event.data);
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
       if (["message", "message_edited", "message_read", "message_deleted_all"].includes(payload.type) && payload.message) {
         setLiveThreads((current) => upsertMessage(current, payload.message));
         setTypingUsers((current) => ({ ...current, [payload.message.chat_id]: null }));

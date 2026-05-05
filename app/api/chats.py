@@ -78,9 +78,9 @@ class ChatResponse(BaseModel):
     custom_title: str | None = None
     is_pinned: bool = False
     pin_order: int = 0
-    members: list[ChatMemberResponse]
+    members: list[ChatMemberResponse] = Field(default_factory=list)
     last_message: ChatMessageResponse | None = None
-    messages: list[ChatMessageResponse] = []
+    messages: list[ChatMessageResponse] = Field(default_factory=list)
 
 
 class ChatConnectionManager:
@@ -205,6 +205,20 @@ def get_message_text(payload: ChatMessageCreate | MessageEditPayload) -> str:
     if len(text) > 4000:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Message body is too long.")
     return text
+
+
+async def read_websocket_chat_id(websocket: WebSocket, payload: dict) -> int | None:
+    try:
+        chat_id = int(payload.get("chat_id") or 0)
+    except (TypeError, ValueError):
+        await websocket.send_json({"type": "error", "detail": "chat_id must be a number."})
+        return None
+
+    if not chat_id:
+        await websocket.send_json({"type": "error", "detail": "chat_id is required."})
+        return None
+
+    return chat_id
 
 
 async def get_user_by_token(token: str, db: AsyncSession) -> User | None:
@@ -442,9 +456,8 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                     await websocket.send_json({"type": "error", "detail": "Invalid JSON."})
                     continue
                 event_type = payload.get("type")
-                chat_id = int(payload.get("chat_id") or 0)
-                if not chat_id:
-                    await websocket.send_json({"type": "error", "detail": "chat_id is required."})
+                chat_id = await read_websocket_chat_id(websocket, payload)
+                if chat_id is None:
                     continue
                 chat = await get_user_chat(db, chat_id, current_user)
                 if event_type == "typing":
@@ -455,7 +468,10 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                     if not text:
                         await websocket.send_json({"type": "error", "detail": "Message body is required."})
                         continue
-                    chat, message = await create_chat_message(db, chat.id, text[:4000], current_user)
+                    if len(text) > 4000:
+                        await websocket.send_json({"type": "error", "detail": "Message body is too long."})
+                        continue
+                    chat, message = await create_chat_message(db, chat.id, text, current_user)
                     for member in chat.members:
                         await manager.send_to_user(member.user_id, make_message_event(message, member.user))
                     continue

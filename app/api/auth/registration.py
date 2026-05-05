@@ -6,6 +6,7 @@ import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth.login import TokenResponse, create_access_token, make_user_response
@@ -125,7 +126,15 @@ async def register(
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.info("Registration rejected by unique constraint: email=%s", email)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User with this email already exists.",
+        )
     await db.refresh(user)
 
     await reset_rate_limit(rate_limit_key)
