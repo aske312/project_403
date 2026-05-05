@@ -42,6 +42,12 @@ function getPeer(chat) {
   return members.find((member) => !chat.messages?.some((message) => message.own && message.sender.id === member.id)) || members[0];
 }
 
+function getLastMessage(chat) {
+  const last = [...(chat.messages || [])].pop();
+  if (!last) return "Начните переписку";
+  return last.body || "Сообщение";
+}
+
 function mapLiveChatToThread(chat) {
   const fallbackMember = getPeer(chat);
   const title = chat.title || fallbackMember?.name || "DEV чат";
@@ -58,6 +64,8 @@ function mapLiveChatToThread(chat) {
     unread: 0,
     members: chat.members?.map((member) => member.name) || [],
     memberItems: chat.members || [],
+    lastMessage: getLastMessage(chat),
+    lastAt: chat.messages?.length ? formatMessageTime(chat.messages[chat.messages.length - 1].created_at) : "",
     messages: (chat.messages || []).map(mapMessage),
   };
 }
@@ -249,7 +257,6 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
   };
 
   const handleHeaderClick = () => {
-    if (activeThread.type !== "direct") return;
     setTitleDraft(activeThread.name);
     setDetailsOpen(true);
   };
@@ -285,7 +292,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
 
   return (
     <section className={detailsOpen ? "chat-workspace details-open" : "chat-workspace"} aria-label="Messenger workspace">
-      <WorkspaceRail projectName={projectName} spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} />
+      <WorkspaceRail projectName={projectName} spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} />
       <WorkspaceSidebar
         profile={profile}
         threads={visibleThreads}

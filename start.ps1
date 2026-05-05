@@ -1535,16 +1535,23 @@ function Test-BenignWebSocketLogLine {
     param([string]$Line)
 
     $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
-    if ($normalized -match "exception|traceback|error|failed|critical|disconnecterror|clientdisconnected") {
-        return $false
-    }
-
-    return (
+    $isWebSocketInfo = (
+        $normalized -match "info:\s+.*websocket" -or
         $normalized -match "websocket .*\[accepted\]" -or
         $normalized -match "connection open" -or
         $normalized -match "connection closed" -or
         $normalized -match "websocket /api/chats/ws"
     )
+
+    if (-not $isWebSocketInfo) {
+        return $false
+    }
+
+    if ($normalized -match "exception|traceback|failed|critical|disconnecterror|clientdisconnected") {
+        return $false
+    }
+
+    return $true
 }
 
 function Get-LiveLogDisplaySource {
