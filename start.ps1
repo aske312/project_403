@@ -1534,24 +1534,25 @@ function Initialize-LiveLogOffsets {
 function Test-BenignWebSocketLogLine {
     param([string]$Line)
 
-    $normalized = if ([string]::IsNullOrWhiteSpace($Line)) { "" } else { $Line.ToLowerInvariant() }
-    $isWebSocketInfo = (
-        $normalized -match "info:\s+.*websocket" -or
-        $normalized -match "websocket .*\[accepted\]" -or
-        $normalized -match "connection open" -or
-        $normalized -match "connection closed" -or
-        $normalized -match "websocket /api/chats/ws"
-    )
-
-    if (-not $isWebSocketInfo) {
+    if ([string]::IsNullOrWhiteSpace($Line)) {
         return $false
     }
 
-    if ($normalized -match "exception|traceback|failed|critical|disconnecterror|clientdisconnected") {
+    $normalized = $Line.ToLowerInvariant().Trim()
+
+    if ($normalized -match "exception|traceback|failed|critical|disconnecterror|clientdisconnected|error:") {
         return $false
     }
 
-    return $true
+    # Uvicorn writes normal WebSocket lifecycle INFO messages to stderr.
+    # They must be shown as backend:ws, not backend:err.
+    if ($normalized.Contains('websocket /api/chats/ws')) { return $true }
+    if ($normalized.Contains('[accepted]') -and $normalized.Contains('websocket')) { return $true }
+    if ($normalized -match '^info:\s+connection\s+(open|closed)$') { return $true }
+    if ($normalized -match 'info:\s+.*connection\s+(open|closed)') { return $true }
+    if ($normalized -match '^info:\s+.*websocket') { return $true }
+
+    return $false
 }
 
 function Get-LiveLogDisplaySource {

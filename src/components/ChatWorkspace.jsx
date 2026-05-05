@@ -91,7 +91,7 @@ function removeMessageForSelf(threads, payloadMessage) {
   });
 }
 
-export default function ChatWorkspace({ profile, projectName, featureFlags = {}, environment = "dev", integrations = {} }) {
+export default function ChatWorkspace({ profile, featureFlags = {}, environment = "dev", integrations = {}, theme = "light", lang = "RU", onToggleTheme, onToggleLang }) {
   const [space, setSpace] = useState("direct");
   const [activeThreadId, setActiveThreadId] = useState("general");
   const [draft, setDraft] = useState("");
@@ -174,16 +174,11 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
   }, [liveChatEnabled, profile, websocketEnabled]);
 
   const threads = useMemo(() => (liveThreads.length > 0 ? [...liveThreads, ...staticThreads] : staticThreads), [liveThreads]);
-  const enabledSpaces = spaces.filter((item) => {
-    if (item.id === "direct") return Boolean(featureFlags.workspace_direct_messages);
-    if (item.id === "team") return Boolean(featureFlags.workspace_team_channels);
-    if (item.id === "voice") return Boolean(featureFlags.workspace_voice_rooms);
-    return true;
-  });
-  const safeSpace = enabledSpaces.some((item) => item.id === space) ? space : enabledSpaces[0]?.id || "direct";
-  const visibleThreads = threads.filter((thread) => thread.space === safeSpace);
-  const activeThread = visibleThreads.find((thread) => thread.id === activeThreadId) || visibleThreads[0] || threads[0];
-  const currentMessages = [...(activeThread.messages || []), ...(localMessages[activeThread.id] || [])];
+  const enabledSpaces = spaces;
+  const safeSpace = enabledSpaces.some((item) => item.id === space) ? space : "direct";
+  const visibleThreads = safeSpace === "direct" ? threads.filter((thread) => thread.space === "direct") : [];
+  const activeThread = visibleThreads.find((thread) => thread.id === activeThreadId) || visibleThreads[0] || threads.find((thread) => thread.id === "notes");
+  const currentMessages = activeThread ? [...(activeThread.messages || []), ...(localMessages[activeThread.id] || [])] : [];
 
   useEffect(() => {
     if (!activeThread?.liveChatId) return;
@@ -192,8 +187,11 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
 
   const handleSpaceChange = (nextSpace) => {
     setSpace(nextSpace);
-    const firstThread = threads.find((thread) => thread.space === nextSpace);
-    if (firstThread) setActiveThreadId(firstThread.id);
+    setDetailsOpen(false);
+    if (nextSpace === "direct") {
+      const firstThread = threads.find((thread) => thread.space === "direct");
+      if (firstThread) setActiveThreadId(firstThread.id);
+    }
   };
 
   const emitTyping = (typing) => {
@@ -210,7 +208,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
   const handleSend = async (event) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || !activeThread) return;
     setDraft("");
     if (activeThread.liveChatId) {
       const optimisticId = `${activeThread.id}-${Date.now()}`;
@@ -292,7 +290,7 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
 
   return (
     <section className={detailsOpen ? "chat-workspace details-open" : "chat-workspace"} aria-label="Messenger workspace">
-      <WorkspaceRail projectName={projectName} spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} />
+      <WorkspaceRail spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} />
       <WorkspaceSidebar
         profile={profile}
         threads={visibleThreads}
@@ -307,19 +305,30 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
         onPinThread={handlePinThread}
         onMovePinned={handleMovePinned}
       />
-      <ChatPanel
-        activeThread={activeThread}
-        messages={currentMessages}
-        profile={profile}
-        composerEnabled={Boolean(featureFlags.workspace_local_composer)}
-        draft={draft}
-        onDraftChange={handleDraftChange}
-        typingUser={activeThread?.liveChatId ? typingUsers[activeThread.liveChatId] : null}
-        onSend={handleSend}
-        onHeaderClick={handleHeaderClick}
-        onEditMessage={handleEditMessage}
-        onDeleteMessage={handleDeleteMessage}
-      />
+      {safeSpace === "direct" ? (
+        <ChatPanel
+          activeThread={activeThread}
+          messages={currentMessages}
+          profile={profile}
+          composerEnabled={Boolean(featureFlags.workspace_local_composer)}
+          draft={draft}
+          onDraftChange={handleDraftChange}
+          typingUser={activeThread?.liveChatId ? typingUsers[activeThread.liveChatId] : null}
+          onSend={handleSend}
+          onHeaderClick={handleHeaderClick}
+          onEditMessage={handleEditMessage}
+          onDeleteMessage={handleDeleteMessage}
+        />
+      ) : (
+        <main className="messenger-empty-space">
+          <div>
+            <span className="empty-space-icon">{enabledSpaces.find((item) => item.id === safeSpace)?.icon}</span>
+            <p className="workspace-kicker">Раздел в разработке</p>
+            <h2>{enabledSpaces.find((item) => item.id === safeSpace)?.title}</h2>
+            <p>Пока здесь пустой блок. Позже добавим функциональность без перестройки основного workspace.</p>
+          </div>
+        </main>
+      )}
       <WorkspaceDetails
         thread={activeThread}
         open={detailsOpen}
@@ -339,10 +348,10 @@ export default function ChatWorkspace({ profile, projectName, featureFlags = {},
               <button className="workspace-icon-button" type="button" onClick={() => setSettingsOpen(false)}>×</button>
             </div>
             <div className="settings-grid">
-              <button type="button" onClick={() => document.documentElement.dataset.theme = "light"}>Светлая тема</button>
-              <button type="button" onClick={() => document.documentElement.dataset.theme = "dark"}>Тёмная тема</button>
-              <button type="button">Русский</button>
-              <button type="button">English</button>
+              <button type="button" onClick={onToggleTheme}>{theme === "light" ? "Включить тёмную тему" : "Включить светлую тему"}</button>
+              <button type="button" onClick={onToggleLang}>{lang === "RU" ? "Switch to English" : "Переключить на русский"}</button>
+              <button type="button">Уведомления клиента</button>
+              <button type="button">Технические параметры</button>
             </div>
           </section>
         </div>

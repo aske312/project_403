@@ -2,40 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { getInitials } from "../utils/workspaceUtils";
 
 function MessageStatus({ status }) {
-  const icons = {
-    sent: "✓",
-    delivered: "✓✓",
-    read: "✓✓",
-    received: "",
-  };
-  const labels = {
-    sent: "Отправлено",
-    delivered: "Доставлено",
-    read: "Прочитано",
-    received: "Получено",
-  };
+  const icons = { sent: "✓", delivered: "✓✓", read: "✓✓", received: "" };
+  const labels = { sent: "Отправлено", delivered: "Доставлено", read: "Прочитано", received: "Получено" };
   return <span className={`message-status ${status || "sent"}`} title={labels[status] || labels.sent}>{icons[status] || icons.sent}</span>;
 }
 
 function getThreadPresence(thread) {
-  if (thread.type !== "direct") return `${thread.members || 0} участников`;
+  if (thread.type !== "direct" && thread.type !== "self") return `${thread.members || 0} участников`;
+  if (thread.id === "notes" || thread.type === "self") return "личные заметки";
   if (thread.status === "online") return "в сети";
   if (thread.status === "busy") return "занят";
   return "был недавно";
 }
 
-export default function ChatPanel({
-  activeThread,
-  messages,
-  composerEnabled,
-  draft,
-  onDraftChange,
-  onSend,
-  typingUser,
-  onHeaderClick,
-  onEditMessage,
-  onDeleteMessage,
-}) {
+export default function ChatPanel({ activeThread, messages, composerEnabled, draft, onDraftChange, onSend, typingUser, onHeaderClick, onEditMessage, onDeleteMessage }) {
   const [menuMessageId, setMenuMessageId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState("");
@@ -62,20 +42,16 @@ export default function ChatPanel({
 
   return (
     <main className="messenger-chat">
-      <header className="chat-topbar">
-        <button className="chat-identity" type="button" onClick={onHeaderClick}>
+      <button className="chat-topbar" type="button" onClick={onHeaderClick}>
+        <span className="chat-identity">
           <span className={`chat-avatar ${activeThread.status || "idle"}`}>{getInitials(activeThread.name)}</span>
           <span>
             <strong>{activeThread.name}</strong>
             <small>{typingUser ? `${typingUser} печатает…` : getThreadPresence(activeThread)}</small>
           </span>
-        </button>
-        <div className="chat-header-actions">
-          <button type="button" title="Поиск по чату">⌕</button>
-          <button type="button" title="Уведомления">◐</button>
-          <button type="button" onClick={onHeaderClick} title="Информация">⋯</button>
-        </div>
-      </header>
+        </span>
+        <span className="chat-header-hint">Информация и настройки</span>
+      </button>
 
       <div className="message-feed" ref={feedRef}>
         <div className="day-divider"><span>Сегодня</span></div>
@@ -93,9 +69,7 @@ export default function ChatPanel({
                       <button type="button" onClick={() => setEditingId(null)}>Отмена</button>
                     </span>
                   </form>
-                ) : (
-                  <p>{message.text}</p>
-                )}
+                ) : <p>{message.text}</p>}
                 <span className="bubble-meta">
                   {message.edited && <em>изм.</em>}
                   <time>{message.time}</time>
@@ -120,17 +94,11 @@ export default function ChatPanel({
       {composerEnabled ? (
         <form className="composer" onSubmit={onSend}>
           <button type="button" className="composer-icon" aria-label="Прикрепить файл">📎</button>
-          <input
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            placeholder={`Сообщение: ${activeThread.name}`}
-          />
+          <input value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Write a message..." />
           <button type="button" className="composer-icon" aria-label="Emoji">☺</button>
           <button type="submit" className="send-button">➤</button>
         </form>
-      ) : (
-        <div className="composer composer-disabled">Отправка сообщений отключена feature flag.</div>
-      )}
+      ) : <div className="composer composer-disabled">Отправка сообщений отключена feature flag.</div>}
     </main>
   );
 }
