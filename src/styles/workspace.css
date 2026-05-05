@@ -942,3 +942,207 @@
     display: none;
   }
 }
+
+/* Workspace v-next: resizable auth-palette messenger shell */
+.workspace-page-shell {
+  min-height: calc(100vh - 44px);
+  height: calc(100vh - 44px);
+  width: 100%;
+  min-width: 980px;
+  overflow: hidden;
+}
+
+.chat-workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 640px;
+  max-height: none;
+  grid-template-columns: 68px auto minmax(520px, 1fr);
+  border-radius: 18px;
+}
+
+.chat-workspace.details-open {
+  grid-template-columns: 68px auto minmax(520px, 1fr) auto;
+}
+
+.messenger-rail {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 12px 9px;
+}
+
+.rail-logo {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--messenger-line));
+  border-radius: 17px;
+  color: #fff;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, #000 8%), color-mix(in srgb, var(--success) 72%, var(--primary) 28%));
+  box-shadow: 0 14px 34px rgba(77, 124, 138, 0.2);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.messenger-sidebar {
+  width: clamp(330px, 27vw, 460px);
+  min-width: 300px;
+  max-width: 560px;
+  resize: horizontal;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.minimal-space-sidebar {
+  width: 92px;
+  min-width: 92px;
+  max-width: 120px;
+  resize: none;
+  grid-template-rows: auto minmax(0, 1fr);
+  justify-items: center;
+  padding: 16px 10px;
+}
+
+.minimal-profile-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.minimal-profile-menu {
+  width: 220px;
+  position: absolute;
+  left: 76px;
+  top: 16px;
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--messenger-line);
+  border-radius: 16px;
+  color: var(--text);
+  background: var(--surface-strong);
+  box-shadow: 0 22px 70px rgba(83, 73, 55, 0.18);
+}
+
+.minimal-profile-menu small {
+  color: var(--muted);
+}
+
+.profile-actions.compact-actions {
+  grid-template-columns: repeat(2, 42px);
+  justify-content: start;
+}
+
+.profile-actions.compact-actions button {
+  min-height: 38px;
+  padding: 0;
+  font-size: 17px;
+}
+
+.conversations-section {
+  min-height: 260px;
+}
+
+.conversation-list,
+.contacts-list,
+.message-feed,
+.messenger-details {
+  scrollbar-width: thin;
+}
+
+.create-dialog-modal {
+  width: min(520px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--messenger-line);
+  border-radius: 22px;
+  background: var(--surface-strong);
+  box-shadow: 0 28px 90px rgba(83, 73, 55, 0.24);
+}
+
+.create-dialog-options {
+  display: grid;
+  gap: 10px;
+}
+
+.create-dialog-options button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-areas: "icon title" "icon text";
+  align-items: center;
+  column-gap: 12px;
+  min-height: 66px;
+  padding: 12px;
+  border: 1px solid var(--messenger-line);
+  border-radius: 16px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.create-dialog-options button:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--messenger-line));
+  background: color-mix(in srgb, var(--primary-soft) 62%, var(--surface) 38%);
+}
+
+.create-dialog-options button > span {
+  grid-area: icon;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--messenger-line);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.create-dialog-options strong {
+  grid-area: title;
+}
+
+.create-dialog-options small {
+  grid-area: text;
+  color: var(--muted);
+}
+
+.chat-topbar {
+  min-height: 74px;
+}
+
+.chat-topbar[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--primary-soft) 70%, var(--surface-strong) 30%);
+}
+
+.messenger-details {
+  width: clamp(320px, 24vw, 430px);
+  min-width: 300px;
+  max-width: 520px;
+  resize: horizontal;
+  overflow: auto;
+}
+
+.messenger-empty-space {
+  min-width: 520px;
+}
+
+@media (max-width: 1100px) {
+  .workspace-page-shell {
+    min-width: 0;
+  }
+
+  .chat-workspace,
+  .chat-workspace.details-open {
+    grid-template-columns: 64px minmax(290px, 360px) minmax(0, 1fr);
+  }
+
+  .messenger-sidebar {
+    resize: none;
+    width: auto;
+  }
+}

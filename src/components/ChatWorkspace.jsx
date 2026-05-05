@@ -91,16 +91,14 @@ function removeMessageForSelf(threads, payloadMessage) {
   });
 }
 
-export default function ChatWorkspace({ profile, featureFlags = {}, environment = "dev", integrations = {}, theme = "light", lang = "RU", onToggleTheme, onToggleLang }) {
+export default function ChatWorkspace({ profile, projectName = "Project 403", featureFlags = {}, environment = "dev", integrations = {}, theme = "light", lang = "RU", onToggleTheme, onToggleLang }) {
   const [space, setSpace] = useState("direct");
   const [activeThreadId, setActiveThreadId] = useState("general");
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState({});
   const [liveThreads, setLiveThreads] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [contactsQuery, setContactsQuery] = useState("");
   const [typingUsers, setTypingUsers] = useState({});
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -136,7 +134,7 @@ export default function ChatWorkspace({ profile, featureFlags = {}, environment 
     let ignore = false;
     const timer = window.setTimeout(async () => {
       try {
-        const { response, payload } = await getContacts(getAccessToken(), contactsQuery);
+        const { response, payload } = await getContacts(getAccessToken(), "");
         if (!ignore && response.ok) setContacts(payload.contacts || []);
       } catch {
         if (!ignore) setContacts([]);
@@ -146,7 +144,7 @@ export default function ChatWorkspace({ profile, featureFlags = {}, environment 
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [contactsQuery, liveChatEnabled, profile]);
+  }, [liveChatEnabled, profile]);
 
   useEffect(() => {
     if (!liveChatEnabled || !profile || !websocketEnabled) return undefined;
@@ -255,8 +253,9 @@ export default function ChatWorkspace({ profile, featureFlags = {}, environment 
   };
 
   const handleHeaderClick = () => {
+    if (!activeThread) return;
     setTitleDraft(activeThread.name);
-    setDetailsOpen(true);
+    setDetailsOpen((value) => !value);
   };
 
   const handleSaveTitle = async () => {
@@ -290,18 +289,14 @@ export default function ChatWorkspace({ profile, featureFlags = {}, environment 
 
   return (
     <section className={detailsOpen ? "chat-workspace details-open" : "chat-workspace"} aria-label="Messenger workspace">
-      <WorkspaceRail spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} />
+      <WorkspaceRail spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} projectName={projectName} />
       <WorkspaceSidebar
         profile={profile}
         threads={visibleThreads}
         contacts={contacts}
-        contactsQuery={contactsQuery}
-        activeThreadId={activeThread.id}
-        collapsed={sidebarCollapsed}
-        onCollapseToggle={() => setSidebarCollapsed((value) => !value)}
-        onContactsQueryChange={setContactsQuery}
+        activeThreadId={activeThread?.id}
+        activeSpace={safeSpace}
         onThreadChange={setActiveThreadId}
-        onOpenSettings={() => setSettingsOpen(true)}
         onPinThread={handlePinThread}
         onMovePinned={handleMovePinned}
       />

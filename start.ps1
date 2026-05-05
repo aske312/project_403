@@ -1546,10 +1546,11 @@ function Test-BenignWebSocketLogLine {
 
     # Uvicorn writes normal WebSocket lifecycle INFO messages to stderr.
     # They must be shown as backend:ws, not backend:err.
-    if ($normalized.Contains('websocket /api/chats/ws')) { return $true }
-    if ($normalized.Contains('[accepted]') -and $normalized.Contains('websocket')) { return $true }
-    if ($normalized -match '^info:\s+connection\s+(open|closed)$') { return $true }
-    if ($normalized -match 'info:\s+.*connection\s+(open|closed)') { return $true }
+    if ($normalized.Contains('/api/chats/ws')) { return $true }
+    if ($normalized.Contains('"websocket ')) { return $true }
+    if ($normalized.Contains('[accepted]') -and ($normalized.Contains('websocket') -or $normalized.Contains('/ws'))) { return $true }
+    if ($normalized.Contains('connection open')) { return $true }
+    if ($normalized.Contains('connection closed')) { return $true }
     if ($normalized -match '^info:\s+.*websocket') { return $true }
 
     return $false
