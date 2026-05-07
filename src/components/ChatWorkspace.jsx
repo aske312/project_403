@@ -101,6 +101,7 @@ export default function ChatWorkspace({ profile, projectName = "Project 403", fe
   const [typingUsers, setTypingUsers] = useState({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [sidebarCompact, setSidebarCompact] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const socketRef = useRef(null);
 
@@ -193,6 +194,7 @@ export default function ChatWorkspace({ profile, projectName = "Project 403", fe
     setSpace(nextSpace);
     setDetailsOpen(false);
     if (nextSpace === "direct") {
+      setSidebarCompact(false);
       const firstThread = threads.find((thread) => thread.space === "direct");
       if (firstThread) setActiveThreadId(firstThread.id);
     }
@@ -294,7 +296,7 @@ export default function ChatWorkspace({ profile, projectName = "Project 403", fe
   };
 
   return (
-    <section className={detailsOpen ? "chat-workspace details-open" : "chat-workspace"} aria-label="Messenger workspace">
+    <section className={["chat-workspace", detailsOpen ? "details-open" : "", sidebarCompact ? "sidebar-compact" : ""].filter(Boolean).join(" ")} aria-label="Messenger workspace">
       <WorkspaceRail spaces={enabledSpaces} activeSpace={safeSpace} onSpaceChange={handleSpaceChange} onOpenSettings={() => setSettingsOpen(true)} projectName={projectName} />
       <WorkspaceSidebar
         profile={profile}
@@ -302,10 +304,22 @@ export default function ChatWorkspace({ profile, projectName = "Project 403", fe
         contacts={contacts}
         activeThreadId={activeThread?.id}
         activeSpace={safeSpace}
+        compact={sidebarCompact}
         onThreadChange={setActiveThreadId}
         onPinThread={handlePinThread}
         onMovePinned={handleMovePinned}
       />
+      {safeSpace === "direct" && (
+        <button
+          className="workspace-sidebar-toggle"
+          type="button"
+          onClick={() => setSidebarCompact((value) => !value)}
+          title={sidebarCompact ? "Развернуть список чатов" : "Свернуть список чатов"}
+          aria-label={sidebarCompact ? "Развернуть список чатов" : "Свернуть список чатов"}
+        >
+          {sidebarCompact ? "›" : "‹"}
+        </button>
+      )}
       {safeSpace === "direct" ? (
         <ChatPanel
           activeThread={activeThread}

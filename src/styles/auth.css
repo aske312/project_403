@@ -133,36 +133,35 @@ input {
 }
 
 .auth-shell {
-  width: min(1280px, calc(100% - 36px));
+  width: 100%;
   flex: 1;
+  min-height: calc(100vh - 52px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
-  align-items: start;
-  gap: clamp(28px, 5vw, 58px);
-  margin: 0 auto;
-  padding: 30px 0;
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 480px);
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .auth-shell-profile {
   grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
 }
 
 .intro-panel,
 .auth-card {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
 
 .intro-panel {
-  min-height: 520px;
+  min-height: 100%;
   display: grid;
   gap: clamp(24px, 4vw, 38px);
-  padding: clamp(28px, 5vw, 56px);
-  border-radius: 18px;
+  padding: clamp(96px, 12vh, 150px) clamp(32px, 7vw, 112px) clamp(44px, 7vh, 88px);
+  border-right: 1px solid var(--border);
   background:
-    linear-gradient(120deg, var(--surface-strong), var(--surface-muted));
+    linear-gradient(120deg, color-mix(in srgb, var(--surface-strong) 70%, transparent), color-mix(in srgb, var(--surface-muted) 58%, transparent));
 }
 
 .eyebrow {
@@ -185,7 +184,7 @@ input {
   max-width: 760px;
   margin: 22px 0 0;
   color: var(--muted);
-  font-size: 18px;
+  font-size: clamp(17px, 1.45vw, 21px);
   line-height: 1.6;
 }
 
@@ -388,13 +387,22 @@ input {
 
 .auth-card {
   position: sticky;
-  top: var(--sticky-panel-top);
-  align-self: start;
+  top: 0;
+  align-self: stretch;
   display: grid;
+  align-content: center;
   gap: 18px;
   overflow: hidden;
-  padding: 28px;
-  border-radius: 16px;
+  min-height: 100%;
+  padding: clamp(76px, 10vh, 118px) clamp(28px, 4vw, 48px);
+  border-left: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  box-shadow: -24px 0 70px rgba(83, 73, 55, 0.10);
+}
+
+.auth-card > * {
+  width: min(100%, 390px);
+  justify-self: center;
 }
 
 .auth-card-top {
@@ -667,7 +675,7 @@ input {
 
 .auth-modal-backdrop {
   position: fixed;
-  z-index: 20;
+  z-index: 140;
   inset: 0;
   display: grid;
   place-items: center;
@@ -723,10 +731,15 @@ input {
   .auth-card {
     position: static;
     order: -1;
+    min-height: auto;
+    border-left: 0;
+    border-bottom: 1px solid var(--border);
+    box-shadow: none;
   }
 
   .intro-panel {
     min-height: auto;
+    border-right: 0;
   }
 }
 
@@ -737,9 +750,8 @@ input {
   }
 
   .auth-shell {
-    width: min(100% - 28px, 1280px);
     gap: 18px;
-    padding: 18px 0 24px;
+    padding: 0;
   }
 
   .summary-visual {
@@ -756,18 +768,9 @@ input {
 }
 
 @media (max-width: 560px) {
-  .auth-shell {
-    width: min(100% - 24px, 1280px);
-  }
-
-  .auth-shell {
-    padding-top: 14px;
-  }
-
   .intro-panel,
   .auth-card {
     padding: 22px;
-    border-radius: 12px;
   }
 
   .auth-card h2 {
@@ -806,10 +809,6 @@ input {
 }
 
 @media (max-width: 420px) {
-  .auth-shell {
-    width: min(100% - 18px, 1280px);
-  }
-
   .intro-panel,
   .auth-card {
     padding: 18px;
@@ -829,7 +828,7 @@ input {
 }
 
 .auth-gateway {
-  min-height: 520px;
+  min-height: 100%;
   align-content: center;
   overflow: hidden;
 }
@@ -840,13 +839,14 @@ input {
 
 .auth-gateway-card {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 220px;
-  padding: 16px;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 22px);
+  min-height: clamp(240px, 30vh, 360px);
+  padding: clamp(16px, 2.4vw, 26px);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  background: linear-gradient(135deg, var(--surface-strong), var(--surface-muted));
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: var(--shadow);
 }
 
 .gateway-sidebar {
@@ -920,9 +920,8 @@ input {
   display: grid;
   gap: 8px;
   padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface-strong);
+  border-top: 1px solid var(--border);
+  background: transparent;
 }
 
 .auth-highlight-grid strong {

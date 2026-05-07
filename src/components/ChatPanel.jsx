@@ -42,16 +42,20 @@ export default function ChatPanel({ activeThread, messages, composerEnabled, dra
 
   return (
     <main className="messenger-chat">
-      <button className="chat-topbar" type="button" onClick={onHeaderClick}>
-        <span className="chat-identity">
-          <span className={`chat-avatar ${activeThread.status || "idle"}`}>{getInitials(activeThread.name)}</span>
-          <span>
-            <strong>{activeThread.name}</strong>
-            <small>{typingUser ? `${typingUser} печатает…` : getThreadPresence(activeThread)}</small>
+      <div className="chat-topbar">
+        <button className="chat-identity-button" type="button" onClick={onHeaderClick} title={activeThread.name}>
+          <span className="chat-identity">
+            <span className={`chat-avatar ${activeThread.status || "idle"}`}>{getInitials(activeThread.name)}</span>
+            <span>
+              <strong>{activeThread.name}</strong>
+              <small>{typingUser ? `${typingUser} печатает...` : getThreadPresence(activeThread)}</small>
+            </span>
           </span>
-        </span>
-        <span className="chat-header-hint">Информация и настройки</span>
-      </button>
+        </button>
+        <div className="chat-topbar-actions">
+          <span className="chat-header-hint">Информация и настройки</span>
+        </div>
+      </div>
 
       <div className="message-feed" ref={feedRef}>
         <div className="day-divider"><span>Сегодня</span></div>

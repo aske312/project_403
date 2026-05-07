@@ -38,6 +38,23 @@ function ThreadCard({ thread, active, index, onThreadChange, onPinThread, onMove
   );
 }
 
+function CompactThreadButton({ thread, active, onThreadChange }) {
+  const displayName = thread.id === "notes" ? "Заметки" : thread.name;
+
+  return (
+    <button
+      className={active ? "compact-thread-button active" : "compact-thread-button"}
+      type="button"
+      onClick={() => onThreadChange(thread.id)}
+      title={displayName}
+      aria-label={displayName}
+    >
+      <span className={`conversation-avatar ${thread.status || "idle"}`}>{getInitials(displayName)}</span>
+      {thread.unread > 0 && <span className="compact-thread-badge">{thread.unread}</span>}
+    </button>
+  );
+}
+
 function CreateDialogModal({ onClose }) {
   return (
     <div className="workspace-modal-backdrop" onClick={onClose}>
@@ -93,6 +110,7 @@ export default function WorkspaceSidebar({
   contacts,
   activeThreadId,
   activeSpace = "direct",
+  compact = false,
   onThreadChange,
   onPinThread,
   onMovePinned,
@@ -116,10 +134,32 @@ export default function WorkspaceSidebar({
     return <MinimalSpaceSidebar profile={profile} />;
   }
 
+  if (compact) {
+    return (
+      <aside className="messenger-sidebar compact-dialogs" aria-label="Диалоги">
+        <button className="compact-profile-button" type="button" title={`${profileName} ${profileTag}`}>
+          <span className="profile-chip">{getInitials(profileName)}</span>
+        </button>
+        <button className="compact-create-button" type="button" onClick={() => setCreateOpen(true)} title="Создать чат" aria-label="Создать чат">+</button>
+        <div className="compact-thread-list">
+          {sortedThreads.map((thread) => (
+            <CompactThreadButton
+              key={thread.id}
+              thread={thread}
+              active={thread.id === activeThreadId}
+              onThreadChange={onThreadChange}
+            />
+          ))}
+        </div>
+        {createOpen && <CreateDialogModal onClose={() => setCreateOpen(false)} />}
+      </aside>
+    );
+  }
+
   return (
     <aside className="messenger-sidebar">
       <section className={profileOpen ? "profile-card open" : "profile-card"}>
-        <button className="profile-main" type="button" onClick={() => setProfileOpen((value) => !value)}>
+        <button className="profile-main" type="button" title={`${profileName} ${profileTag}`} onClick={() => setProfileOpen((value) => !value)}>
           <span className="profile-chip">{getInitials(profileName)}</span>
           <span className="profile-text">
             <strong>{profileName}</strong>

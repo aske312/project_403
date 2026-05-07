@@ -92,7 +92,6 @@ export default function Home() {
           setProjectEnvironment(payload.environment || import.meta.env.VITE_ENVIRONMENTS);
           setFeatureFlags(payload.feature_flags || {});
           setOnlineUsers(payload.online_users);
-        setIntegrations(payload.integrations || {});
           setIntegrations(payload.integrations || {});
         }
       } catch {
@@ -102,7 +101,6 @@ export default function Home() {
           setFeatureFlags({});
           setIntegrations({});
           setOnlineUsers(null);
-          setIntegrations({});
         }
       }
     }
