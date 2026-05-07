@@ -178,6 +178,26 @@ export function getContacts(token, query = "") {
   });
 }
 
+export function createChat(payload, token) {
+  return requestJson("/api/chats", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteChat(chatId, token) {
+  return requestJson(`/api/chats/${chatId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export function renameChat(chatId, title, token) {
   return requestJson(`/api/chats/${chatId}`, {
     method: "PATCH",

@@ -49,6 +49,8 @@ async def check_connect(current_user: User = Depends(require_admin_services_user
             "status": "ok",
             "db_response": value,
             "backend": session.get_database_backend(),
+            "requested_backend": session.get_requested_database_backend(),
+            "fallback_active": session.is_database_fallback_active(),
             "version": version,
             "latency_ms": round((time.perf_counter() - started) * 1000, 1),
             "startup_ms": param.DATABASE_STARTUP_DURATION_MS,
@@ -58,6 +60,8 @@ async def check_connect(current_user: User = Depends(require_admin_services_user
         return {
             "status": "error",
             "backend": session.get_database_backend(),
+            "requested_backend": session.get_requested_database_backend(),
+            "fallback_active": session.is_database_fallback_active(),
             "database_url": session.get_public_database_url(),
             "version": None,
             "latency_ms": round((time.perf_counter() - started) * 1000, 1),
@@ -74,6 +78,8 @@ async def initialize_database(current_user: User = Depends(require_admin_service
         return {
             "status": "ok",
             "backend": session.get_database_backend(),
+            "requested_backend": session.get_requested_database_backend(),
+            "fallback_active": session.is_database_fallback_active(),
             "database_url": session.get_public_database_url(),
             "version": None,
             "tables": sorted(Base.metadata.tables.keys())
@@ -82,6 +88,8 @@ async def initialize_database(current_user: User = Depends(require_admin_service
         return {
             "status": "error",
             "backend": session.get_database_backend(),
+            "requested_backend": session.get_requested_database_backend(),
+            "fallback_active": session.is_database_fallback_active(),
             "database_url": session.get_public_database_url(),
             "error": str(e)
         }

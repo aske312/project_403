@@ -41,6 +41,8 @@ class Chat(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    type: Mapped[str] = mapped_column(String(24), default="direct")
+    public_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

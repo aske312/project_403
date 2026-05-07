@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 import time
 from pathlib import Path
@@ -118,6 +119,16 @@ def is_database_fallback_enabled():
     return param.DB_FALLBACK_ENABLED and environment_rules.get("enabled", False)
 
 
+def get_requested_database_backend():
+    if not param.POSTGRESQL_ENABLED:
+        return get_database_backend()
+    return make_url(param.DATABASE_URL).get_backend_name()
+
+
+def is_database_fallback_active():
+    return active_database_url == param.DB_FALLBACK_URL and param.POSTGRESQL_ENABLED
+
+
 def get_sqlite_database_path(url):
     parsed_url = make_url(url)
     if parsed_url.get_backend_name() != "sqlite":
@@ -186,6 +197,12 @@ async def ensure_user_handle_column(conn):
         await ensure_sqlite_column(conn, "chat_members", chat_member_columns, "custom_title", "VARCHAR(120)")
         await ensure_sqlite_column(conn, "chat_members", chat_member_columns, "is_pinned", "BOOLEAN DEFAULT 0")
         await ensure_sqlite_column(conn, "chat_members", chat_member_columns, "pin_order", "INTEGER DEFAULT 0")
+        chat_columns_result = await conn.execute(text("PRAGMA table_info(chats)"))
+        chat_columns = list(chat_columns_result)
+        await ensure_sqlite_column(conn, "chats", chat_columns, "type", "VARCHAR(24) DEFAULT 'direct'")
+        await ensure_sqlite_column(conn, "chats", chat_columns, "public_id", "INTEGER")
+        await conn.execute(text("UPDATE chats SET type = 'direct' WHERE type IS NULL OR type = ''"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_chats_public_id ON chats (public_id)"))
 
         message_columns_result = await conn.execute(text("PRAGMA table_info(messages)"))
         message_columns = list(message_columns_result)
@@ -217,6 +234,10 @@ async def ensure_user_handle_column(conn):
         await conn.execute(text("ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS custom_title VARCHAR(120)"))
         await conn.execute(text("ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false"))
         await conn.execute(text("ALTER TABLE chat_members ADD COLUMN IF NOT EXISTS pin_order INTEGER DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS type VARCHAR(24) DEFAULT 'direct'"))
+        await conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS public_id INTEGER"))
+        await conn.execute(text("UPDATE chats SET type = 'direct' WHERE type IS NULL OR type = ''"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_chats_public_id ON chats (public_id)"))
         await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE"))
         await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP WITH TIME ZONE"))
         await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP WITH TIME ZONE"))
@@ -255,6 +276,10 @@ async def init_active_database(*, create_missing_tables):
             await check_database_connection()
     except Exception as exc:
         if active_database_url == param.DB_FALLBACK_URL:
+            raise
+
+        if not is_database_fallback_enabled():
+            logger.error("Primary database is unavailable and database fallback is disabled: %s", exc)
             raise
 
         logger.warning("Primary database is unavailable, trying fallback database: %s", exc)
@@ -434,8 +459,26 @@ async def init_db():
 
     await ensure_dev_seed_users()
     await ensure_dev_direct_chat()
+    await ensure_chat_public_ids()
 
 
 async def get_session():
     async with SessionLocal() as db_session:
         yield db_session
+
+
+async def ensure_chat_public_ids():
+    async with SessionLocal() as db_session:
+        existing_values = set((await db_session.execute(select(Chat.public_id).where(Chat.public_id.is_not(None)))).scalars().all())
+        chats = (await db_session.execute(select(Chat).where(Chat.public_id.is_(None)))).scalars().all()
+        for chat in chats:
+            for _ in range(100):
+                value = random.randint(100000, 999999)
+                if value not in existing_values:
+                    chat.public_id = value
+                    existing_values.add(value)
+                    break
+            if chat.public_id is None:
+                chat.public_id = 100000 + chat.id
+        if chats:
+            await db_session.commit()

@@ -5,6 +5,7 @@ param(
     [switch]$SkipSystemDeps,
     [switch]$SkipInstall,
     [switch]$SkipBuild,
+    [switch]$SkipTests,
     [switch]$StartDb,
     [switch]$StartRedis,
     [switch]$DockerServices,
@@ -1317,6 +1318,13 @@ if ($SkipInstall -and $WebSocketEnabled) {
         $LauncherRealtimeMode = "WebSocket missing"
         throw "WEBSOCKET_ENABLED=True, but WebSocket dependencies are missing. Run without -SkipInstall or install uvicorn[standard]."
     }
+}
+
+if (-not $SkipTests) {
+    Set-LauncherStatus 62 "tests" "running"
+    Invoke-LoggedChecked $Npm @("run", "test")
+    Invoke-LoggedChecked $VenvPython @("-m", "py_compile", "app/api/admin.py", "app/api/db.py", "app/api/chats.py", "app/db/models.py", "app/db/session.py")
+    Set-LauncherStatus 64 "tests" "passed"
 }
 
 if (-not $SkipBuild) {

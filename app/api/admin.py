@@ -8,7 +8,7 @@ from fastapi.responses import Response
 
 from app.api.auth.login import get_current_user, get_optional_current_user
 from app.db.models import User
-from app.db.session import get_database_backend, get_public_database_url
+from app.db.session import get_database_backend, get_public_database_url, get_requested_database_backend, is_database_fallback_active
 from app.feature_flags import get_feature_flags, is_feature_enabled
 from app.logging_config import get_log_root
 from app.runtime_state import get_online_user_count, get_runtime_metrics
@@ -73,9 +73,12 @@ async def health(current_user: User | None = Depends(get_optional_current_user))
             "compose_file": "config/docker-compose.yml",
             "database": {
                 "backend": get_database_backend(),
+                "requested_backend": get_requested_database_backend(),
                 "url": get_public_database_url(),
                 "postgresql_enabled": param.POSTGRESQL_ENABLED,
                 "fallback_enabled": param.DB_FALLBACK_ENABLED,
+                "fallback_active": is_database_fallback_active(),
+                "mode": "fallback" if is_database_fallback_active() else "primary",
             },
             "redis": {
                 "enabled": param.REDIS_ENABLED,

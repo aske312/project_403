@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import AppFooter from "../components/AppFooter";
 import AppControls from "../components/AppControls";
 import Auth from "./Auth";
-import Workspace from "./Workspace";
 import { config } from "../config/appConfig";
 import { getHealth, login, register } from "../utils/apiClient";
 import { normalizeEnvironment } from "../utils/environment";
@@ -47,7 +47,8 @@ function getAuthErrorMessage(payload, fallback, t) {
   return message;
 }
 
-export default function Home() {
+export default function AuthPage() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(getStoredTheme);
   const [lang, setLang] = useState(getStoredLanguage);
   const [mode, setMode] = useState("login");
@@ -57,10 +58,10 @@ export default function Home() {
   const [projectEnvironment, setProjectEnvironment] = useState(import.meta.env.VITE_ENVIRONMENTS);
   const [featureFlags, setFeatureFlags] = useState({});
   const [onlineUsers, setOnlineUsers] = useState(null);
-  const [integrations, setIntegrations] = useState({});
   const {
     profile,
     setProfile,
+    profileLoaded,
     sessionExpired,
     setSessionExpired,
     accountOpen,
@@ -92,14 +93,12 @@ export default function Home() {
           setProjectEnvironment(payload.environment || import.meta.env.VITE_ENVIRONMENTS);
           setFeatureFlags(payload.feature_flags || {});
           setOnlineUsers(payload.online_users);
-          setIntegrations(payload.integrations || {});
         }
       } catch {
         if (!ignore) {
           setProjectName(config.app.project.defaultName);
           setProjectEnvironment(import.meta.env.VITE_ENVIRONMENTS);
           setFeatureFlags({});
-          setIntegrations({});
           setOnlineUsers(null);
         }
       }
@@ -151,15 +150,7 @@ export default function Home() {
       setAccountOpen(false);
       setSessionExpired(false);
       setStatus("");
-
-      try {
-        const { payload } = await getHealth(result.access_token);
-        setFeatureFlags(payload.feature_flags || {});
-        setOnlineUsers(payload.online_users);
-        setIntegrations(payload.integrations || {});
-      } catch {
-        setFeatureFlags({});
-      }
+      navigate("/", { replace: true });
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -167,65 +158,50 @@ export default function Home() {
     }
   };
 
+  if (profileLoaded && profile) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className={`auth-page ${theme}`}>
-      {!profile && (
-        <AppControls
-          theme={theme}
-          lang={lang}
-          t={t}
-          profile={profile}
-          accountOpen={accountOpen}
-          onToggleAccount={() => setAccountOpen((value) => !value)}
-          onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
-          onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
-          onLogout={handleLogout}
-          adminLinkVisible={showAdminLink}
-          adminLinkLabel={t.adminPanel}
-        />
-      )}
+      <AppControls
+        theme={theme}
+        lang={lang}
+        t={t}
+        profile={profile}
+        accountOpen={accountOpen}
+        onToggleAccount={() => setAccountOpen((value) => !value)}
+        onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
+        onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
+        onLogout={handleLogout}
+        adminLinkVisible={showAdminLink}
+        adminLinkLabel={t.adminPanel}
+      />
 
-      <main className={profile ? "auth-shell auth-shell-profile" : "auth-shell"}>
-        {profile ? (
-          <Workspace
-            profile={profile}
-            projectName={projectName}
-            featureFlags={featureFlags}
-            version={import.meta.env.VITE_APP_VERSION}
-            environment={projectEnvironment}
-            integrations={integrations}
-            theme={theme}
-            lang={lang}
-            onToggleTheme={() => setTheme((current) => storeTheme(getNextTheme(current)))}
-            onToggleLang={() => setLang((current) => storeLanguage(getNextLanguage(current)))}
-          />
-        ) : (
-          <Auth
-            mode={mode}
-            status={visibleStatus}
-            submitting={submitting}
-            t={t}
-            projectName={projectName}
-            onModeChange={handleModeChange}
-            onSubmit={handleSubmit}
-          />
-        )}
+      <main className="auth-shell">
+        <Auth
+          mode={mode}
+          status={visibleStatus}
+          submitting={submitting}
+          t={t}
+          projectName={projectName}
+          onModeChange={handleModeChange}
+          onSubmit={handleSubmit}
+        />
       </main>
 
-      {!profile && (
-        <AppFooter
-          variant="auth"
-          statusState={env.state}
-          version={import.meta.env.VITE_APP_VERSION}
-          onlineUsers={onlineUsers}
-          canViewOnlineUsers={canViewOnlineUsers}
-          links={[
-            { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
-            { href: "https://vk.com/aske312", label: t.vk },
-            { href: "https://t.me/aske312", label: t.telegram },
-          ]}
-        />
-      )}
+      <AppFooter
+        variant="auth"
+        statusState={env.state}
+        version={import.meta.env.VITE_APP_VERSION}
+        onlineUsers={onlineUsers}
+        canViewOnlineUsers={canViewOnlineUsers}
+        links={[
+          { href: "https://github.com/aske312/project_403/blob/master/README.md", label: t.github },
+          { href: "https://vk.com/aske312", label: t.vk },
+          { href: "https://t.me/aske312", label: t.telegram },
+        ]}
+      />
     </div>
   );
 }

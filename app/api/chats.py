@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import json
 import logging
+import random
 from contextlib import suppress
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
@@ -34,6 +35,12 @@ class ChatRenamePayload(BaseModel):
     title: str = Field(min_length=1, max_length=120)
 
 
+class ChatCreatePayload(BaseModel):
+    type: str = Field(default="direct", pattern="^(direct|group|channel)$")
+    title: str | None = Field(default=None, max_length=120)
+    member_ids: list[int] = Field(default_factory=list, max_length=100)
+
+
 class ChatPinPayload(BaseModel):
     pinned: bool = True
     pin_order: int | None = None
@@ -55,6 +62,7 @@ class ChatMemberResponse(BaseModel):
     name: str
     role: str
     is_super_admin: bool
+    is_online: bool = False
 
 
 class ChatMessageResponse(BaseModel):
@@ -73,6 +81,7 @@ class ChatMessageResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     id: int
+    public_id: int | None = None
     title: str
     type: str = "direct"
     custom_title: str | None = None
@@ -129,6 +138,7 @@ def make_member_response(user: User) -> ChatMemberResponse:
         name=user.name,
         role=user.role or "user",
         is_super_admin=bool(user.is_super_admin),
+        is_online=user.id in manager.active,
     )
 
 
@@ -187,7 +197,17 @@ def get_chat_title(chat: Chat, current_user: User) -> str:
         return chat.title
 
     other_members = [member.user.name for member in chat.members if member.user_id != current_user.id]
-    return ", ".join(other_members) or "Saved messages"
+    fallback = {"group": "Group", "channel": "Channel"}.get(chat.type or "direct", "Saved messages")
+    return ", ".join(other_members) or fallback
+
+
+async def generate_chat_public_id(db: AsyncSession) -> int:
+    for _ in range(100):
+        value = random.randint(100000, 999999)
+        existing = await db.scalar(select(Chat.id).where(Chat.public_id == value))
+        if not existing:
+            return value
+    raise HTTPException(status_code=500, detail="Could not allocate chat number.")
 
 
 def ensure_dev_chat_enabled():
@@ -276,12 +296,38 @@ async def create_chat_message(db: AsyncSession, chat_id: int, text: str, current
     return chat, message
 
 
+async def load_chat_for_response(db: AsyncSession, chat_id: int, current_user: User) -> Chat:
+    return await get_user_chat(db, chat_id, current_user)
+
+
+async def notify_presence(db: AsyncSession, current_user: User, is_online: bool):
+    result = await db.execute(
+        select(Chat)
+        .options(selectinload(Chat.members).selectinload(ChatMember.user))
+        .join(ChatMember)
+        .where(ChatMember.user_id == current_user.id)
+    )
+    chats = result.scalars().unique().all()
+    payload = {"type": "presence", "user_id": current_user.id, "is_online": is_online}
+    for chat in chats:
+        for member in chat.members:
+            if member.user_id != current_user.id:
+                await manager.send_to_user(member.user_id, payload)
+
+
 def serialize_chat(chat: Chat, current_user: User) -> ChatResponse:
     member = get_current_chat_member(chat, current_user)
-    visible_messages = [message for message in chat.messages if not any(hidden.user_id == current_user.id for hidden in getattr(message, "hidden_for", []) or [])]
+    visible_messages = [
+        message
+        for message in chat.messages
+        if not message.deleted_for_all_at
+        and not any(hidden.user_id == current_user.id for hidden in getattr(message, "hidden_for", []) or [])
+    ]
     return ChatResponse(
         id=chat.id,
+        public_id=chat.public_id,
         title=get_chat_title(chat, current_user),
+        type=chat.type or "direct",
         custom_title=member.custom_title if member else None,
         is_pinned=bool(member.is_pinned) if member else False,
         pin_order=member.pin_order if member else 0,
@@ -331,6 +377,50 @@ async def list_contacts(q: str = Query(default=""), current_user: User = Depends
     return {"status": "ok", "contacts": contacts}
 
 
+@router.post("")
+async def create_chat(payload: ChatCreatePayload, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    ensure_dev_chat_enabled()
+    requested_ids = {int(user_id) for user_id in payload.member_ids if int(user_id) != current_user.id}
+    members_result = await db.execute(select(User).where(User.id.in_(requested_ids)))
+    other_users = members_result.scalars().all() if requested_ids else []
+    if len(other_users) != len(requested_ids):
+        raise HTTPException(status_code=404, detail="One or more users were not found.")
+
+    if payload.type == "direct":
+        if len(other_users) != 1:
+            raise HTTPException(status_code=422, detail="Direct chat requires exactly one existing user.")
+        peer = other_users[0]
+        existing_result = await db.execute(
+            select(Chat)
+            .options(
+                selectinload(Chat.members).selectinload(ChatMember.user),
+                selectinload(Chat.messages).selectinload(Message.sender),
+                selectinload(Chat.messages).selectinload(Message.hidden_for),
+            )
+            .join(ChatMember)
+            .where(Chat.type == "direct", ChatMember.user_id.in_([current_user.id, peer.id]))
+        )
+        for chat in existing_result.scalars().unique().all():
+            if {member.user_id for member in chat.members} == {current_user.id, peer.id}:
+                return {"status": "ok", "chat": serialize_chat(chat, current_user).model_dump(mode="json")}
+
+    title = (payload.title or "").strip() or None
+    chat = Chat(title=title, type=payload.type, public_id=await generate_chat_public_id(db))
+    db.add(chat)
+    await db.flush()
+    db.add(ChatMember(chat_id=chat.id, user_id=current_user.id))
+    for user in other_users:
+        db.add(ChatMember(chat_id=chat.id, user_id=user.id))
+    await db.commit()
+    chat = await load_chat_for_response(db, chat.id, current_user)
+    event = {"type": "chat_created", "chat": serialize_chat(chat, current_user).model_dump(mode="json")}
+    await manager.send_to_user(current_user.id, event)
+    for member in chat.members:
+        if member.user_id != current_user.id:
+            await manager.send_to_user(member.user_id, {"type": "chat_created", "chat": serialize_chat(chat, member.user).model_dump(mode="json")})
+    return {"status": "ok", "chat": serialize_chat(chat, current_user).model_dump(mode="json")}
+
+
 @router.post("/{chat_id}/messages")
 async def create_message(chat_id: int, payload: ChatMessageCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     ensure_dev_chat_enabled()
@@ -373,6 +463,22 @@ async def pin_chat(chat_id: int, payload: ChatPinPayload, current_user: User = D
     await db.refresh(chat)
     await manager.send_to_user(current_user.id, {"type": "chat_updated", "chat_id": chat.id})
     return {"status": "ok", "chat": serialize_chat(chat, current_user).model_dump(mode="json")}
+
+
+@router.delete("/{chat_id}")
+async def delete_chat(chat_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    ensure_dev_chat_enabled()
+    chat = await get_user_chat(db, chat_id, current_user)
+    member = get_current_chat_member(chat, current_user)
+    if not member:
+        raise HTTPException(status_code=404, detail="Chat member not found.")
+    if len(chat.members) <= 1:
+        await db.delete(chat)
+    else:
+        await db.delete(member)
+    await db.commit()
+    await manager.send_to_user(current_user.id, {"type": "chat_deleted", "chat_id": chat_id})
+    return {"status": "ok"}
 
 
 @router.patch("/messages/{message_id}")
@@ -448,6 +554,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
         try:
             await manager.connect(current_user.id, websocket)
             await websocket.send_json({"type": "ready", "user_id": current_user.id})
+            await notify_presence(db, current_user, True)
             while True:
                 raw = await websocket.receive_text()
                 try:
@@ -484,3 +591,4 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                 await websocket.close(code=1011)
         finally:
             manager.disconnect(current_user.id, websocket)
+            await notify_presence(db, current_user, current_user.id in manager.active)

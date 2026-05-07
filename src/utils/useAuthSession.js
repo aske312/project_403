@@ -95,7 +95,7 @@ export function useAuthSession() {
     setAccountOpen(false);
     setProfileLoaded(true);
     setSessionExpired(false);
-    navigate("/", { replace: true });
+    navigate("/auth", { replace: true });
   };
 
   return {
