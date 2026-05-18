@@ -247,6 +247,7 @@ export default function ChatWorkspace({
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarCompact, setSidebarCompact] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
   const [threadMenu, setThreadMenu] = useState(null);
   const [messageMenuId, setMessageMenuId] = useState(null);
@@ -486,6 +487,7 @@ export default function ChatWorkspace({
   const openThread = (thread) => {
     setActiveThreadId(thread.id);
     setThreadMenu(null);
+    setSidebarOpen(false);
   };
 
   const activeSpaceData = spaces.find((item) => item.id === activeSpace);
@@ -494,7 +496,7 @@ export default function ChatWorkspace({
   const emptyText = activeThread?.type === "self" ? "Здесь можно оставить быстрые мысли." : "Первое сообщение задаст тон беседе.";
 
   return (
-    <section className={["messenger-zero", sidebarCompact ? "compact" : "", detailsOpen ? "details" : ""].filter(Boolean).join(" ")}>
+    <section className={["messenger-zero", sidebarCompact ? "compact" : "", sidebarOpen ? "sidebar-open" : "", detailsOpen ? "details" : ""].filter(Boolean).join(" ")}>
       <aside className="mz-rail">
         <div className="mz-logo" title={projectName}>{String(projectName || "P4").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div>
         <nav>
@@ -507,7 +509,7 @@ export default function ChatWorkspace({
         <button type="button" className="mz-rail-settings" onClick={() => setSettingsOpen(true)} title="Настройки">⚙</button>
       </aside>
 
-      <aside className="mz-sidebar">
+      <aside className={["mz-sidebar", sidebarOpen ? "mobile-open" : ""].filter(Boolean).join(" ")}>
         <div className="mz-profile" ref={profileRef}>
           <button type="button" onClick={() => setProfileOpen((value) => !value)}>
             <span className="mz-avatar self">{getInitials(profileName)}</span>
@@ -564,7 +566,8 @@ export default function ChatWorkspace({
       {activeSpace === "direct" ? (
         <main className="mz-chat">
           <header className="mz-chat-head">
-            <button type="button" onClick={() => { setTitleDraft(activeThread?.name || ""); setDetailsOpen((value) => !value); }}>
+            <button type="button" className="mz-mobile-sidebar-button" onClick={() => setSidebarOpen(true)} title={"\u0421\u043f\u0438\u0441\u043e\u043a \u0447\u0430\u0442\u043e\u0432"} aria-label={"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0447\u0430\u0442\u043e\u0432"}>{"\u2630"}</button>
+            <button type="button" className="mz-chat-title-button" onClick={() => { setTitleDraft(activeThread?.name || ""); setDetailsOpen((value) => !value); }}>
               <ThreadAvatar thread={activeThread} />
               <span>
                 <strong>{activeThread?.name}</strong>
@@ -631,6 +634,8 @@ export default function ChatWorkspace({
           ) : <div className="mz-composer disabled">Отправка отключена feature flag.</div>}
         </main>
       ) : <EmptySection activeSpace={activeSpaceData?.id} />}
+
+      {sidebarOpen && <button type="button" className="mz-sidebar-scrim" aria-label={"\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u0441\u043f\u0438\u0441\u043e\u043a \u0447\u0430\u0442\u043e\u0432"} onClick={() => setSidebarOpen(false)} />}
 
       {detailsOpen && activeThread && (
         <aside className="mz-details">

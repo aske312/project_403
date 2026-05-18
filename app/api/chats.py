@@ -113,7 +113,7 @@ class ChatConnectionManager:
         for socket in sockets:
             try:
                 await socket.send_json(payload)
-            except (RuntimeError, WebSocketDisconnect, Exception):
+            except (RuntimeError, WebSocketDisconnect):
                 self.disconnect(user_id, socket)
 
     async def broadcast_to_chat_members(self, chat: Chat, payload: dict, *, except_user_id: int | None = None):

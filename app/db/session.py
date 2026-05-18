@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import Base, Chat, ChatMember, Message, MessageHidden, User
+from app.message_cipher import encrypt_message_body
 from app.setting.config import parameters as param
 
 logger = logging.getLogger(__name__)
@@ -447,7 +448,7 @@ async def ensure_dev_direct_chat():
             Message(
                 chat_id=chat.id,
                 sender_id=supervisor.id,
-                body="DEV чат готов: можно проверять обмен сообщениями между supervisor и user.",
+                body=encrypt_message_body("DEV чат готов: можно проверять обмен сообщениями между supervisor и user."),
             ),
         ])
         await db_session.commit()
